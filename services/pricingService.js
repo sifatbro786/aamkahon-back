@@ -202,15 +202,21 @@ export const applyCouponLogic = async (couponCode, itemsSubtotal, userId, items 
 };
 
 /**
- * Flat, admin-configured shipping charge for a given zone/delivery-type,
- * applied once per order (see MIGRATION_NOTES.md — this used to be
- * multiplied by item quantity, which was wrong for lightweight stationery).
+ * Weight-based, admin-configured shipping for a zone/delivery type.
+ *
+ * charge = baseCharge + ceil(max(0, totalWeightKg - baseWeightKg)) * perKgCharge
+ *
+ * Mango and gur ship by the crate, so courier cost scales with weight. The
+ * base build charged one flat amount per order (right for light stationery,
+ * wrong here). perKgCharge = 0 reproduces that flat behaviour exactly.
+ * Free/reduced thresholds and free-shipping coupons still apply on top.
  */
 export const calculateShippingCharge = async ({
     locationType,
     deliveryType,
     orderAmountAfterDiscount,
     isFreeShippingByCoupon = false,
+    totalWeightKg = 0,
 }) => {
     const rateDoc = await ShippingRate.findOne({
         locationType,
@@ -226,7 +232,13 @@ export const calculateShippingCharge = async ({
         };
     }
 
-    let shippingPrice = rateDoc.baseCharge;
+    const perKg = Number(rateDoc.perKgCharge) || 0;
+    const extraWeightKg =
+        perKg > 0 ? Math.ceil(Math.max(0, totalWeightKg - (Number(rateDoc.baseWeightKg) || 0))) : 0;
+    const weightCharge = extraWeightKg * perKg;
+    const fullCharge = rateDoc.baseCharge + weightCharge;
+
+    let shippingPrice = fullCharge;
 
     if (
         rateDoc.freeShippingThreshold &&
@@ -238,14 +250,26 @@ export const calculateShippingCharge = async ({
         rateDoc.reducedShippingAmount !== null &&
         orderAmountAfterDiscount >= rateDoc.reducedShippingThreshold
     ) {
-        shippingPrice = Math.min(rateDoc.baseCharge, rateDoc.reducedShippingAmount);
+        shippingPrice = Math.min(fullCharge, rateDoc.reducedShippingAmount);
     }
 
     if (isFreeShippingByCoupon) {
         shippingPrice = 0;
     }
 
-    return { rateDoc, shippingPrice, error: null };
+    return {
+        rateDoc,
+        shippingPrice,
+        error: null,
+        breakdown: {
+            flatCharge: rateDoc.baseCharge,
+            totalWeightKg: Math.round(totalWeightKg * 100) / 100,
+            extraWeightKg,
+            perKgCharge: perKg,
+            weightCharge,
+            totalShipping: shippingPrice,
+        },
+    };
 };
 
 export const calculateTax = (taxableAmount) => {
@@ -270,7 +294,12 @@ export const computeOrderTotals = async ({
     deliveryType,
     isCOD,
     items = [],
+    totalWeightKg = 0,
+    // Pre-order: { advanceBase } from lineItemPricing.priceLines. The advance
+    // is paid online; shipping and the rest are due on delivery. No COD fee.
+    preOrder = null,
 }) => {
+    if (preOrder) isCOD = false;
     const taxRate = parseFloat(process.env.VAT_RATE) || 0;
 
     const couponResult = await applyCouponLogic(couponCode, itemsSubtotal, userId, items);
@@ -282,11 +311,12 @@ export const computeOrderTotals = async ({
 
     const orderAmountAfterDiscount = itemsSubtotal - discountAmount;
 
-    const { rateDoc, shippingPrice, error } = await calculateShippingCharge({
+    const { rateDoc, shippingPrice, error, breakdown } = await calculateShippingCharge({
         locationType,
         deliveryType,
         orderAmountAfterDiscount,
         isFreeShippingByCoupon,
+        totalWeightKg,
     });
     if (error) {
         return { ok: false, status: 400, message: error };
@@ -314,6 +344,14 @@ export const computeOrderTotals = async ({
     }
     finalTotal = parseFloat((finalTotal + taxPrice).toFixed(2));
 
+    if (preOrder) {
+        // Scale the advance by the coupon, so a discount lowers the advance too.
+        const ratio = itemsSubtotal > 0 ? orderAmountAfterDiscount / itemsSubtotal : 0;
+        const advance = Math.min(finalTotal, Math.ceil(preOrder.advanceBase * ratio));
+        codOnlinePaymentAmount = advance;
+        remainingAmount = parseFloat((finalTotal - advance).toFixed(2));
+    }
+
     return {
         ok: true,
         discountAmount,
@@ -324,5 +362,7 @@ export const computeOrderTotals = async ({
         taxPrice,
         totalPrice: finalTotal,
         couponId: couponResult.couponId || null,
+        shippingBreakdown: breakdown,
+        isPreOrder: Boolean(preOrder),
     };
 };

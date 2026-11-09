@@ -8,7 +8,9 @@
         "dev": "nodemon server.js",
         "seed:districts": "node scripts/seedDistricts.js",
         "seed:shipping": "node scripts/seedShippingRates.js",
-        "test": "echo \"No backend tests yet\" && exit 0"
+        "test": "echo \"No backend tests yet\" && exit 0",
+        "seed": "node scripts/seed.js",
+        "seed:all": "node scripts/seedDistricts.js && node scripts/seed.js"
     },
     "keywords": [],
     "author": "",

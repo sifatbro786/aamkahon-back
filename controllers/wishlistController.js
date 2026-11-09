@@ -10,7 +10,7 @@ import Product from "../models/Product.js";
  * photography.
  */
 const PRODUCT_FIELDS =
-    "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants isActive";
+    "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants isActive nameBn unit priceVisibility wholesale minOrderQty availability preOrder";
 
 /** Shared read, so add/remove can return the same shape as get. */
 const loadWishlist = async (userId) => {

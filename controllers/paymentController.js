@@ -3,6 +3,14 @@ import { verifyPayment } from "../config/sslcommerz.js";
 import Order from "../models/Order.js";
 import { updateProductStock } from "./orderController.js";
 
+// Partial online payments: COD (delivery + COD fee up front) and pre-bookings
+// (the advance). Both keep the online part in codOnlinePaymentAmount and the
+// balance in remainingAmount, so verification must expect that amount.
+const isPartialOnline = (order) =>
+    order.paymentMethod === "COD" || order.orderType === "pre_order";
+const onlineAmountDue = (order) =>
+    isPartialOnline(order) ? order.codOnlinePaymentAmount || 0 : order.totalPrice;
+
 const getClientUrl = () => {
     return (
         process.env.CLIENT_URL ||
@@ -107,7 +115,7 @@ export const processSuccessRedirect = async (req, res) => {
         // order is treated as unverified (not paid) — never trusted by default.
         if (val_id && status === "VALID") {
             const isCOD = order.paymentMethod === "COD";
-            const expectedAmount = isCOD ? order.codOnlinePaymentAmount || 0 : order.totalPrice;
+            const expectedAmount = onlineAmountDue(order);
 
             console.log("Verifying payment:", { val_id, isCOD, expectedAmount });
 
@@ -123,12 +131,14 @@ export const processSuccessRedirect = async (req, res) => {
         }
 
         if (isVerified) {
-            if (order.paymentMethod === "COD") {
+            if (isPartialOnline(order)) {
                 const codPaidAmount = order.codOnlinePaymentAmount || 0;
                 const remainingAmount = order.remainingAmount || order.totalPrice - codPaidAmount;
                 const isFullyPaid = codPaidAmount >= order.totalPrice;
 
-                order.orderStatus = "Confirmed";
+                // Pre-bookings wait for the harvest; admin moves them to
+                // Confirmed later, which decrements stock in updateOrderStatus.
+                order.orderStatus = order.orderType === "pre_order" ? "Pre-booked" : "Confirmed";
                 // FIX: "Partially Paid" isn't a valid paymentStatus enum value (Order.js only
                 // allows Pending/Paid/Failed/Refunded) — this used to throw a ValidationError
                 // on save() for every COD order with a remaining balance, silently breaking
@@ -148,7 +158,7 @@ export const processSuccessRedirect = async (req, res) => {
 
                 order.adminNotes = order.adminNotes || [];
                 order.adminNotes.push({
-                    note: `COD charge of ${codPaidAmount} BDT paid online. Remaining ${remainingAmount} BDT to be collected upon delivery.`,
+                    note: `${order.orderType === "pre_order" ? "Pre-booking advance" : "COD charge"} of ${codPaidAmount} BDT paid online. Remaining ${remainingAmount} BDT to be collected upon delivery.`,
                     // System entry: addedBy is an ObjectId ref, omitted for a
                     // non-user actor. "system" cast-fails and, under
                     // save({ validateBeforeSave: false }), persists as undefined.
@@ -172,7 +182,11 @@ export const processSuccessRedirect = async (req, res) => {
             }
 
             try {
-                await updateProductStock(order.orderItems, "decrease");
+                // Pre-booked stock does not exist yet; it is decremented when
+                // the admin confirms the order (updateOrderStatus transition).
+                if (order.orderType !== "pre_order") {
+                    await updateProductStock(order.orderItems, "decrease");
+                }
                 console.log("Stock updated successfully");
             } catch (stockError) {
                 console.error("Stock update error:", stockError);
@@ -311,13 +325,13 @@ export const handleIPN = async (req, res) => {
             return res.status(404).send("Order Not Found");
         }
 
-        if (order.orderStatus === "Processing" || order.orderStatus === "Confirmed") {
+        if (["Processing", "Confirmed", "Pre-booked"].includes(order.orderStatus)) {
             console.log(`IPN: Order ${tran_id} already processed`);
             return res.status(200).send("IPN Handled (Already Processed)");
         }
 
         const isCODOrder = order.paymentMethod === "COD";
-        const expectedAmount = isCODOrder ? order.codOnlinePaymentAmount || 0 : order.totalPrice;
+        const expectedAmount = onlineAmountDue(order);
 
         console.log("IPN Expected amount:", {
             isCODOrder,
@@ -328,14 +342,16 @@ export const handleIPN = async (req, res) => {
         const verificationResult = await verifyPayment(val_id, tran_id, expectedAmount);
 
         if (verificationResult.isValid) {
-            if (isCODOrder) {
+            if (isPartialOnline(order)) {
                 const codPaidAmount = order.codOnlinePaymentAmount || 0;
                 const remainingAmount = order.remainingAmount || order.totalPrice - codPaidAmount;
 
                 console.log(`IPN: COD Charge paid for order ${tran_id}: ${codPaidAmount} BDT`);
                 const isFullyPaidIPN = codPaidAmount >= order.totalPrice;
 
-                order.orderStatus = "Confirmed";
+                // Pre-bookings wait for the harvest; admin moves them to
+                // Confirmed later, which decrements stock in updateOrderStatus.
+                order.orderStatus = order.orderType === "pre_order" ? "Pre-booked" : "Confirmed";
                 // FIX: same enum-mismatch bug as processSuccessRedirect — see comment there.
                 order.paymentStatus = isFullyPaidIPN ? "Paid" : "Pending";
                 if (isFullyPaidIPN) order.paidAt = new Date();
@@ -348,11 +364,13 @@ export const handleIPN = async (req, res) => {
                     remaining_amount: remainingAmount,
                 };
 
-                await updateProductStock(order.orderItems, "decrease");
+                if (order.orderType !== "pre_order") {
+                    await updateProductStock(order.orderItems, "decrease");
+                }
 
                 order.adminNotes = order.adminNotes || [];
                 order.adminNotes.push({
-                    note: `COD charge of ${codPaidAmount} BDT paid online. Remaining ${remainingAmount} BDT to be collected upon delivery.`,
+                    note: `${order.orderType === "pre_order" ? "Pre-booking advance" : "COD charge"} of ${codPaidAmount} BDT paid online. Remaining ${remainingAmount} BDT to be collected upon delivery.`,
                     // System entry: addedBy is an ObjectId ref, omitted for a
                     // non-user actor. "system" cast-fails and, under
                     // save({ validateBeforeSave: false }), persists as undefined.

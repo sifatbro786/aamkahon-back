@@ -16,7 +16,8 @@ import {
 } from "../controllers/productController.js";
 
 import { body } from "express-validator";
-import { protect } from "../middlewares/authMiddleware.js";
+import { optionalProtect, protect } from "../middlewares/authMiddleware.js";
+import { maskHiddenPrices } from "../middlewares/maskHiddenPrices.js";
 
 const router = express.Router();
 
@@ -29,6 +30,9 @@ const reviewValidationRules = [
 ];
 
 // ============= PUBLIC ROUTES (No Auth Required) =============
+// Inquiry/TBA products never expose a price publicly (admins exempt).
+router.use(optionalProtect, maskHiddenPrices);
+
 router.get("/", getProducts);
 router.get("/featured", getFeaturedProducts);
 router.get("/attributes", getProductAttributes);

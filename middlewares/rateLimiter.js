@@ -55,6 +55,16 @@ export const trackingLimiter = rateLimit({
     handler: jsonHandler,
 });
 
+// Inquiries (Aamkahon): public form that writes to the DB and sends an email.
+// 5 per 15 min per IP stops inbox flooding; a real buyer sends one or two.
+export const inquiryLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: jsonHandler,
+});
+
 // Global API limiter (Phase 0): everything under /api that isn't covered by a
 // tighter limiter above. Generous enough that a browsing session never trips it
 // (a product page fans out to several requests), strict enough to blunt

@@ -272,6 +272,8 @@ export const createShippingRate = async (req, res) => {
             locationType,
             deliveryType,
             baseCharge,
+            baseWeightKg,
+            perKgCharge,
             codChargeType,
             codChargeValue,
             freeShippingThreshold,
@@ -311,6 +313,8 @@ export const createShippingRate = async (req, res) => {
             locationType,
             deliveryType,
             baseCharge,
+            baseWeightKg,
+            perKgCharge,
             codChargeType,
             codChargeValue,
             freeShippingThreshold,
@@ -335,6 +339,8 @@ export const updateShippingRate = async (req, res) => {
         const { id } = req.params;
         const {
             baseCharge,
+            baseWeightKg,
+            perKgCharge,
             codChargeType,
             codChargeValue,
             freeShippingThreshold,
@@ -349,6 +355,8 @@ export const updateShippingRate = async (req, res) => {
         }
 
         if (baseCharge !== undefined) rate.baseCharge = baseCharge;
+        if (baseWeightKg !== undefined) rate.baseWeightKg = baseWeightKg;
+        if (perKgCharge !== undefined) rate.perKgCharge = perKgCharge;
         if (codChargeType) rate.codChargeType = codChargeType;
         if (codChargeValue !== undefined) rate.codChargeValue = codChargeValue;
         if (freeShippingThreshold !== undefined) rate.freeShippingThreshold = freeShippingThreshold;

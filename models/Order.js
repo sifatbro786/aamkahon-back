@@ -14,6 +14,11 @@ const orderItemSchema = new mongoose.Schema({
     },
     quantity: { type: Number, required: true },
     price: { type: Number, required: true },
+    // Snapshot of how the line was priced (wholesale tier vs retail).
+    retailPrice: { type: Number },
+    wholesaleApplied: { type: Boolean, default: false },
+    unit: { type: String },
+    weightKg: { type: Number, default: 0 },
     image: { type: String },
 });
 
@@ -124,6 +129,11 @@ const shippingBreakdownSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        // Weight-based breakdown (flatCharge = the zone's baseCharge).
+        totalWeightKg: { type: Number, default: 0 },
+        extraWeightKg: { type: Number, default: 0 },
+        perKgCharge: { type: Number, default: 0 },
+        weightCharge: { type: Number, default: 0 },
     },
     { _id: false },
 );
@@ -202,6 +212,10 @@ const orderSchema = new mongoose.Schema(
             required: true,
             enum: [
                 "Pending",
+                // Pre-order advance paid, waiting for the harvest. Not a
+                // stock-held status: moving it to Confirmed decrements stock
+                // through the normal updateOrderStatus transition.
+                "Pre-booked",
                 "Confirmed",
                 "Processing",
                 "Shipped",
@@ -217,6 +231,19 @@ const orderSchema = new mongoose.Schema(
             default: "Pending",
         },
         statusHistory: [orderStatusHistorySchema],
+
+        orderType: {
+            type: String,
+            enum: ["regular", "pre_order"],
+            default: "regular",
+            index: true,
+        },
+        // Pre-order: codOnlinePaymentAmount holds the advance, remainingAmount
+        // the balance due on delivery (same fields COD uses for its split).
+        preOrder: {
+            expectedDate: { type: Date },
+        },
+        totalWeightKg: { type: Number, default: 0 },
 
         codCharge: {
             type: Number,

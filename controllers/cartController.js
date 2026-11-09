@@ -1,6 +1,7 @@
 import Campaign from "../models/Campaign.js";
 import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
+import { findVariantByOptions, orderabilityError, unitPriceFor } from "../services/lineItemPricing.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const getCart = async (req, res, next) => {
@@ -18,7 +19,7 @@ export const getCart = async (req, res, next) => {
             // Without it every line reported unlimited stock, the shopper could
             // click past what exists, and the server then rejected the update
             // and snapped the number back, which reads as a broken control.
-            select: "name slug imageGroups variants hasVariants price basePrice stock discountPercentage stockStatus isActive",
+            select: "name slug imageGroups variants hasVariants price basePrice stock discountPercentage stockStatus isActive unit priceVisibility wholesale minOrderQty availability preOrder nameBn weight",
         });
 
         if (!cart) {
@@ -94,6 +95,15 @@ export const getCart = async (req, res, next) => {
                 }
             }
 
+            // Display price only (wholesale tier aware). The order is priced
+            // again from scratch by lineItemPricing at checkout.
+            {
+                const liveVariant = product.hasVariants
+                    ? findVariantByOptions(product, item.variant?.options)
+                    : null;
+                livePrice = unitPriceFor(product, liveVariant, item.quantity).unitPrice;
+            }
+
             let currentItemPrice = item.priceAtPurchase || 0;
             if ((currentItemPrice ?? 0).toFixed(2) !== (livePrice ?? 0).toFixed(2)) {
                 console.log(
@@ -122,7 +132,7 @@ export const getCart = async (req, res, next) => {
             // Without it every line reported unlimited stock, the shopper could
             // click past what exists, and the server then rejected the update
             // and snapped the number back, which reads as a broken control.
-            select: "name slug imageGroups variants hasVariants price basePrice stock discountPercentage stockStatus isActive",
+            select: "name slug imageGroups variants hasVariants price basePrice stock discountPercentage stockStatus isActive unit priceVisibility wholesale minOrderQty availability preOrder nameBn weight",
             });
         }
 
@@ -313,12 +323,19 @@ export const addItemToCart = async (req, res, next) => {
             priceToUse = product.price || product.basePrice || 0;
         }
 
-        if (availableStock !== undefined && qty > availableStock) {
-            return res.status(400).json({
-                success: false,
-                message: `Only ${availableStock} unit(s) in stock.`,
-            });
+        // Visibility (inquiry/TBA), season, minimum order, pre-order cap and
+        // stock, one rule set shared with checkout (services/lineItemPricing.js).
+        const matchedVariant = product.hasVariants
+            ? findVariantByOptions(product, variant?.options)
+            : null;
+        if (product.hasVariants && !matchedVariant) {
+            return res.status(400).json({ success: false, message: "Please choose a valid option." });
         }
+        const addError = orderabilityError(product, matchedVariant, qty);
+        if (addError) {
+            return res.status(400).json({ success: false, message: addError });
+        }
+        priceToUse = unitPriceFor(product, matchedVariant, qty).unitPrice;
 
         const basePriceToUse = product.basePrice || priceToUse;
         const discountPercentageToUse = product.discountPercentage || 0;
@@ -368,14 +385,16 @@ export const addItemToCart = async (req, res, next) => {
 
         if (existingItem) {
             const newQty = existingItem.quantity + qty;
-            if (availableStock !== undefined && newQty > availableStock) {
+            const mergeError = orderabilityError(product, matchedVariant, newQty);
+            if (mergeError) {
                 return res.status(400).json({
                     success: false,
-                    message: `Only ${availableStock} unit(s) in stock. You already have ${existingItem.quantity} in your cart.`,
+                    message: `${mergeError}. You already have ${existingItem.quantity} in your cart.`,
                 });
             }
             existingItem.quantity = newQty;
-            existingItem.priceAtPurchase = priceToUse;
+            // Re-tier: the combined quantity may now reach the wholesale minimum.
+            existingItem.priceAtPurchase = unitPriceFor(product, matchedVariant, newQty).unitPrice;
             existingItem.basePrice = basePriceToUse;
             existingItem.discountPercentage = discountPercentageToUse;
             console.log("Item already in cart, updated quantity:", existingItem.quantity);
@@ -387,7 +406,7 @@ export const addItemToCart = async (req, res, next) => {
         await cart.save();
         cart = await Cart.findById(cart._id).populate(
             "items.product",
-            "name slug imageGroups variants hasVariants stock",
+            "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder nameBn",
         );
         console.log("Cart saved successfully, total items:", cart.items.length);
 
@@ -443,7 +462,7 @@ export const mergeGuestCart = async (req, res, next) => {
     if (items.length === 0) {
         const existing = await Cart.findOne({ user: req.user.id }).populate(
             "items.product",
-            "name slug imageGroups variants hasVariants stock",
+            "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder nameBn",
         );
         return res.status(200).json({
             success: true,
@@ -506,6 +525,18 @@ export const mergeGuestCart = async (req, res, next) => {
 
             if (price == null || price <= 0) price = product.price || product.basePrice || 0;
 
+            // Inquiry/TBA, out of season and below-minimum lines are skipped
+            // rather than merged; stock is clamped below as before.
+            const mergeVariant = product.hasVariants ? findVariantByOptions(product, options) : null;
+            const blocked = orderabilityError(product, mergeVariant, Math.max(quantity, product.minOrderQty || 1), {
+                stockCheck: false,
+            });
+            if (blocked) {
+                skipped.push({ productId: incoming.productId, reason: "not_orderable", message: blocked });
+                continue;
+            }
+            if (product.availability === "pre_order") availableStock = Infinity;
+
             // Same matching rule as addItemToCart: product id plus the option
             // set, compared order-independently.
             const existingItem = cart.items.find((item) => {
@@ -531,7 +562,7 @@ export const mergeGuestCart = async (req, res, next) => {
                 const clamped = Math.min(target, cap);
                 if (clamped > existingItem.quantity) merged += clamped - existingItem.quantity;
                 existingItem.quantity = Math.max(1, clamped);
-                existingItem.priceAtPurchase = price;
+                existingItem.priceAtPurchase = unitPriceFor(product, mergeVariant, existingItem.quantity).unitPrice;
                 existingItem.basePrice = product.basePrice || price;
             } else {
                 const clamped = Math.min(quantity, cap);
@@ -542,7 +573,7 @@ export const mergeGuestCart = async (req, res, next) => {
                 cart.items.push({
                     product: incoming.productId,
                     quantity: clamped,
-                    priceAtPurchase: price,
+                    priceAtPurchase: unitPriceFor(product, mergeVariant, clamped).unitPrice,
                     basePrice: product.basePrice || price,
                     discountPercentage: product.discountPercentage || 0,
                     variant: variantData,
@@ -552,7 +583,7 @@ export const mergeGuestCart = async (req, res, next) => {
         }
 
         await cart.save();
-        await cart.populate("items.product", "name slug imageGroups variants hasVariants stock");
+        await cart.populate("items.product", "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder nameBn");
 
         res.status(200).json({ success: true, cart, merged, skipped });
     } catch (error) {
@@ -586,7 +617,7 @@ export const updateCartItem = async (req, res, next) => {
     try {
         const cart = await Cart.findOne({ user: req.user.id }).populate(
             "items.product",
-            "stock variants hasVariants",
+            "name price basePrice stock variants hasVariants isActive" + " unit priceVisibility wholesale minOrderQty availability preOrder nameBn weight",
         );
 
         if (!cart) {
@@ -617,16 +648,19 @@ export const updateCartItem = async (req, res, next) => {
             if (variantItem) availableStock = variantItem.stock;
         }
 
-        if (availableStock !== undefined && quantity > availableStock) {
-            return res.status(400).json({
-                success: false,
-                message: `Only ${availableStock} unit(s) in stock.`,
-            });
+        const qtyInt = parseInt(quantity, 10);
+        const liveVariant = product?.hasVariants
+            ? findVariantByOptions(product, item.variant?.options)
+            : null;
+        const updateError = orderabilityError(product, liveVariant, qtyInt);
+        if (updateError) {
+            return res.status(400).json({ success: false, message: updateError });
         }
 
-        item.quantity = quantity;
+        item.quantity = qtyInt;
+        item.priceAtPurchase = unitPriceFor(product, liveVariant, qtyInt).unitPrice;
         await cart.save();
-        await cart.populate("items.product", "name slug imageGroups variants hasVariants stock");
+        await cart.populate("items.product", "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder nameBn");
 
         res.status(200).json({ success: true, cart });
     } catch (error) {
@@ -656,6 +690,6 @@ export const removeItemFromCart = asyncHandler(async (req, res) => {
 
     cart.items.pull({ _id: req.params.itemId });
     await cart.save();
-    await cart.populate("items.product", "name slug imageGroups variants hasVariants stock");
+    await cart.populate("items.product", "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder nameBn");
     res.status(200).json({ success: true, cart });
 });

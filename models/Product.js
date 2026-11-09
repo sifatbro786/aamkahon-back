@@ -59,6 +59,11 @@ const variantSchema = new mongoose.Schema(
         imageGroupName: { type: String, trim: true },
         sku: { type: String, sparse: true },
         order: { type: Number, default: 0 },
+        // Aamkahon: per-variant wholesale unit price (required for a variant
+        // to get wholesale; NO fallback to product.wholesale.price, pack sizes
+        // differ) and weight in kg for shipping (falls back to product.weight).
+        wholesalePrice: { type: Number, min: 0, default: null },
+        weight: { type: Number, min: 0, default: null },
         // ✅ ADD THIS NEW FIELD:
         campaignPrice: {
             type: Number,
@@ -159,6 +164,46 @@ const productSchema = new mongoose.Schema(
             min: [0, "Stock cannot be negative"],
         },
         lowStockAlert: { type: Number, default: 5, min: 0 },
+
+        // ============= WHOLESALE / PRE-BOOKING (Aamkahon) =============
+        // Bangla display name. `name` stays Latin because the slug hook strips
+        // non-ASCII characters (a Bangla-only name would slug to product-<ts>).
+        nameBn: { type: String, trim: true },
+        // Selling unit shown next to every price and quantity (kg, piece, jar, crate).
+        unit: { type: String, trim: true, default: "kg" },
+        // show: normal price. inquiry / tba: price is masked from every public
+        // product response (middlewares/maskHiddenPrices.js) and the product
+        // cannot be carted or ordered; shoppers send an Inquiry instead.
+        priceVisibility: {
+            type: String,
+            enum: ["show", "inquiry", "tba"],
+            default: "show",
+        },
+        // Quantity tier: quantity >= minQty gets the wholesale unit price on
+        // that line, automatically. Decided server side in
+        // services/lineItemPricing.js; never trust a client price.
+        wholesale: {
+            enabled: { type: Boolean, default: false },
+            minQty: { type: Number, min: 1, default: null },
+            price: { type: Number, min: 0, default: null },
+        },
+        // Hard minimum per order line (e.g. a wholesale-only crate). 1 = none.
+        minOrderQty: { type: Number, min: 1, default: 1 },
+        // in_stock: normal. pre_order: orderable without stock, pays an advance,
+        // order lands in "Pre-booked". out_of_season: browse only.
+        availability: {
+            type: String,
+            enum: ["in_stock", "pre_order", "out_of_season"],
+            default: "in_stock",
+            index: true,
+        },
+        preOrder: {
+            expectedDate: { type: Date, default: null },
+            advancePercent: { type: Number, min: 0, max: 100, default: 25 },
+            maxQtyPerOrder: { type: Number, min: 1, default: null },
+            note: { type: String, trim: true },
+        },
+        // ============= END WHOLESALE / PRE-BOOKING =============
         isFeatured: { type: Boolean, default: false },
         isActive: { type: Boolean, default: true },
 
@@ -251,6 +296,7 @@ const productSchema = new mongoose.Schema(
                 createdAt: { type: Date, default: Date.now },
             },
         ],
+        // Unit weight in KG. Drives weight-based shipping (pricingService).
         weight: { type: Number, default: 0, min: 0 },
         dimensions: {
             length: { type: Number, default: 0, min: 0 },

@@ -33,6 +33,12 @@ const productValidationRules = [
     body("category").isMongoId().withMessage("Valid category ID is required"),
     body("basePrice").isNumeric().withMessage("Base price must be a number"),
     body("stock").isInt({ min: 0 }).withMessage("Stock must be a non-negative integer"),
+    // Aamkahon wholesale / pre-booking fields
+    body("priceVisibility").optional().isIn(["show", "inquiry", "tba"]),
+    body("availability").optional().isIn(["in_stock", "pre_order", "out_of_season"]),
+    body("unit").optional().isString().trim().isLength({ max: 20 }),
+    body("nameBn").optional().isString().trim().isLength({ max: 200 }),
+    body("minOrderQty").optional().isInt({ min: 1 }),
 ];
 
 const sectionValidationRules = [

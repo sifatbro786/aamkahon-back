@@ -4,6 +4,7 @@ import Cart from "../models/Cart.js";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import { computeOrderTotals } from "../services/pricingService.js";
+import { priceLines } from "../services/lineItemPricing.js";
 import { escapeRegex } from "../utils/escapeRegex.js";
 import { incrementCouponUsage } from "./couponController.js";
 
@@ -208,95 +209,72 @@ export const createOrder = async (req, res, next) => {
             });
         }
 
-        const isCOD = paymentMethod === "COD";
-
-        // ─── Order Items ──────────────────────────────────────────────────────────
-        let finalOrderItems = [];
+        // ─── Order Items: priced from the live Product only ───────────────────────
+        // FIX (critical, price-tampering): guest lines used to take
+        // item.price / item.priceAtPurchase straight from the request (i.e. from
+        // localStorage), so a guest could order anything for 1 BDT. Signed-in
+        // lines used the cart's stored priceAtPurchase, which went stale when a
+        // campaign or wholesale tier changed. Every line now goes through
+        // services/lineItemPricing.js (retail/wholesale tier, visibility,
+        // availability, stock, weight).
+        let rawItems;
         let user = null;
 
         if (isGuest) {
-            finalOrderItems = guestItems.map((item) => {
-                const variantData = convertVariantToOrderFormat(item.variant);
-                return {
-                    name: item.name,
-                    product: item.productId,
-                    variant: variantData,
-                    quantity: parseInt(item.quantity) || 1,
-                    price: parseFloat(item.priceAtPurchase || item.price || 0),
-                    image: item.image || "",
-                };
-            });
+            rawItems = guestItems;
         } else {
             if (!req.user) {
                 await session.abortTransaction();
                 return res.status(401).json({ success: false, message: "Authentication required" });
             }
-
             user = req.user.id;
-            const cart = await Cart.findOne({ user })
-                .session(session)
-                .populate("items.product", "name slug imageGroups variants hasVariants");
-
+            const cart = await Cart.findOne({ user }).session(session).lean();
             if (!cart || cart.items.length === 0) {
                 await session.abortTransaction();
                 return res.status(400).json({ success: false, message: "Cart is empty" });
             }
-
-            finalOrderItems = cart.items.map((item) => {
-                const variantData = convertVariantToOrderFormat(item.variant);
-                const product = item.product;
-                let imageUrl = "";
-
-                if (item.imageGroupName && product.imageGroups) {
-                    const variantImageGroup = product.imageGroups.find(
-                        (group) => group.name === item.imageGroupName,
-                    );
-                    if (variantImageGroup?.images.length > 0) {
-                        imageUrl = variantImageGroup.images[0].url;
-                    }
-                }
-
-                if (!imageUrl && product.imageGroups?.length > 0) {
-                    const mainGroup =
-                        product.imageGroups.find((g) => g.name === "Main") ||
-                        product.imageGroups[0];
-                    if (mainGroup?.images.length > 0) imageUrl = mainGroup.images[0].url;
-                }
-
-                return {
-                    name: getOrderItemName(product.name, item.variant, item.variantDisplayName),
-                    product: product._id,
-                    variant: variantData,
-                    quantity: parseInt(item.quantity) || 1,
-                    price: parseFloat(item.priceAtPurchase || 0),
-                    image: imageUrl,
-                };
-            });
+            rawItems = cart.items;
         }
 
-        // ─── Price Calculation ────────────────────────────────────────────────────
-        // FIX (critical, price-tampering): shippingPrice/taxPrice/discountAmount/
-        // codCharge/codOnlinePaymentAmount/remainingAmount used to come straight
-        // from req.body and were trusted as-is. They are now always recomputed
-        // server-side via the same logic the checkout-preview endpoint uses
-        // (services/pricingService.js) — nothing price-related is accepted from
-        // the client here.
-        const itemsPrice = finalOrderItems.reduce(
-            (acc, item) => acc + item.price * item.quantity,
-            0,
-        );
+        const priced = await priceLines(rawItems, { session });
+        if (!priced.ok) {
+            await session.abortTransaction();
+            return res
+                .status(priced.status)
+                .json({ success: false, message: priced.message, errors: priced.errors });
+        }
 
+        const isPreOrder = priced.isPreOrder;
+        // Pre-bookings always pay their advance online, whatever was posted.
+        const effectivePaymentMethod = isPreOrder ? "SSLCommerz" : paymentMethod;
+        const isCOD = effectivePaymentMethod === "COD";
+
+        const finalOrderItems = priced.lines.map((l) => ({
+            name: l.name,
+            product: l.product,
+            variant: l.variant,
+            quantity: l.quantity,
+            price: l.price,
+            retailPrice: l.retailPrice,
+            wholesaleApplied: l.wholesaleApplied,
+            unit: l.unit,
+            weightKg: l.weightKg,
+            image: l.image,
+        }));
+
+        // ─── Price Calculation ────────────────────────────────────────────────────
+        // shipping/tax/discount/COD/advance are recomputed server side via the
+        // same function the checkout preview uses; nothing is read from the body.
         const pricing = await computeOrderTotals({
-            itemsSubtotal: itemsPrice,
+            itemsSubtotal: priced.itemsSubtotal,
             couponCode,
             userId: isGuest ? null : user,
             locationType,
             deliveryType: finalDeliveryType,
             isCOD,
-            // FIX: previously omitted — appliesTo="products"/"categories" coupon
-            // restrictions could not be checked without item-level product data,
-            // so real order creation ignored them entirely (see pricingService.js).
-            items: finalOrderItems,
+            items: priced.lines,
+            totalWeightKg: priced.totalWeightKg,
+            preOrder: isPreOrder ? { advanceBase: priced.advanceBase } : null,
         });
 
         if (!pricing.ok) {
@@ -333,7 +311,10 @@ export const createOrder = async (req, res, next) => {
                 deliveryType: finalDeliveryType,
                 courierBranch: finalDeliveryType === "Courier" ? courierBranch : undefined,
             },
-            paymentMethod,
+            paymentMethod: effectivePaymentMethod,
+            orderType: isPreOrder ? "pre_order" : "regular",
+            preOrder: isPreOrder ? { expectedDate: priced.expectedDate } : undefined,
+            totalWeightKg: priced.totalWeightKg,
             shippingPrice: finalShippingPrice,
             taxPrice: finalTaxPrice,
             couponCode: couponCode || undefined,
@@ -342,7 +323,7 @@ export const createOrder = async (req, res, next) => {
             orderStatus: "Pending",
             paymentStatus: "Pending",
             shippingBreakdown: {
-                flatCharge: finalShippingPrice,
+                ...(pricing.shippingBreakdown || {}),
                 totalQuantity: finalOrderItems.reduce((acc, i) => acc + i.quantity, 0),
                 totalShipping: finalShippingPrice,
             },
@@ -355,9 +336,11 @@ export const createOrder = async (req, res, next) => {
         await newOrder.save({ session, validateBeforeSave: false });
 
         // ─── SSLCommerz Payment ───────────────────────────────────────────────────
-        if (paymentMethod === "SSLCommerz") {
+        if (effectivePaymentMethod === "SSLCommerz") {
+            // Pre-order: charge only the advance; the rest is due on delivery.
+            const amountNow = isPreOrder ? pricing.codOnlinePaymentAmount : totalPrice;
             const paymentData = {
-                amount: totalPrice,
+                amount: amountNow,
                 cus_name: shippingAddress.name,
                 cus_email: shippingAddress.email || newOrder.guestEmail || "customer@example.com",
                 cus_phone: shippingAddress.phone,
@@ -371,7 +354,7 @@ export const createOrder = async (req, res, next) => {
             };
 
             console.log(
-                `SSLCommerz Payment Initializing: ${totalPrice} BDT for order ${newOrder._id}`,
+                `SSLCommerz Payment Initializing: ${amountNow} BDT for order ${newOrder.orderNumber || newOrder._id}`,
             );
             const paymentInit = await initializePayment(newOrder._id.toString(), paymentData);
 
@@ -412,7 +395,7 @@ export const createOrder = async (req, res, next) => {
             }
 
             // ─── COD Payment ──────────────────────────────────────────────────────────
-        } else if (paymentMethod === "COD") {
+        } else if (effectivePaymentMethod === "COD") {
             // FIX (critical, price-tampering): these three values used to be
             // re-derived from req.body.codOnlinePaymentAmount / req.body.codCharge /
             // req.body.remainingAmount. They're already correct on `newOrder`
@@ -505,57 +488,6 @@ export const createOrder = async (req, res, next) => {
     } finally {
         session.endSession();
     }
-};
-
-/**
- * converting Variant data to orders.
- */
-const convertVariantToOrderFormat = (variant) => {
-    if (!variant || Object.keys(variant).length === 0) {
-        return undefined;
-    }
-
-    // full options array (current cart shape) — preserve ALL attributes, not just the first
-    if (variant.options && Array.isArray(variant.options) && variant.options.length > 0) {
-        return {
-            options: variant.options.map((opt) => ({ name: opt.name, value: opt.value })),
-            displayName:
-                variant.displayName ||
-                variant.options.map((opt) => `${opt.name}: ${opt.value}`).join(", "),
-            sku: variant.sku || undefined,
-        };
-    }
-
-    // legacy single name/value shape (older clients / imported data)
-    if (variant.name || variant.value) {
-        return {
-            options: [{ name: variant.name || "Variant", value: variant.value || "Default" }],
-            displayName: `${variant.name || "Variant"}: ${variant.value || "Default"}`,
-            sku: variant.sku || undefined,
-        };
-    }
-
-    return undefined;
-};
-
-/**
- * creating order items name with variant details for better order summary
- */
-const getOrderItemName = (productName, variant, variantDisplayName) => {
-    let itemName = productName;
-
-    if (variantDisplayName) {
-        itemName += ` - ${variantDisplayName}`;
-    } else if (variant && variant.options && Array.isArray(variant.options)) {
-        const variantText = variant.options.map((opt) => `${opt.name}: ${opt.value}`).join(", ");
-        if (variantText) {
-            itemName += ` - ${variantText}`;
-        }
-    } else if (variant && (variant.name || variant.value)) {
-        itemName += ` - ${variant.name || "Variant"}: ${variant.value || "Default"}`;
-    }
-
-    return itemName;
 };
 
 // @desc    Look up an order by number + phone, for guests
@@ -737,6 +669,7 @@ export const getAllOrders = async (req, res, next) => {
             status,
             paymentMethod,
             paymentStatus,
+            orderType,
             search,
             sortBy = "createdAt",
             sortOrder = "desc",
@@ -747,6 +680,8 @@ export const getAllOrders = async (req, res, next) => {
         if (status && status !== "all") filter.orderStatus = status;
         if (paymentMethod && paymentMethod !== "all") filter.paymentMethod = paymentMethod;
         if (paymentStatus && paymentStatus !== "all") filter.paymentStatus = paymentStatus;
+        // Pre-bookings list in admin = ?orderType=pre_order
+        if (orderType === "pre_order" || orderType === "regular") filter.orderType = orderType;
 
         // Search functionality
         if (search) {
@@ -792,6 +727,7 @@ export const getOrderStats = async (req, res, next) => {
         const totalOrders = await Order.countDocuments();
         const pendingOrders = await Order.countDocuments({ orderStatus: "Pending" });
         const deliveredOrders = await Order.countDocuments({ orderStatus: "Delivered" });
+        const preBookedOrders = await Order.countDocuments({ orderStatus: "Pre-booked" });
         const totalRevenue = await Order.aggregate([
             { $match: { orderStatus: "Delivered" } },
             { $group: { _id: null, total: { $sum: "$totalPrice" } } },
@@ -823,6 +759,7 @@ export const getOrderStats = async (req, res, next) => {
                 totalOrders,
                 pendingOrders,
                 deliveredOrders,
+                preBookedOrders,
                 totalRevenue: totalRevenue[0]?.total || 0,
                 monthlyRevenue: monthlyRevenue[0]?.total || 0,
                 recentOrders,
@@ -860,6 +797,7 @@ export const updateOrderStatus = async (req, res, next) => {
         // Validate status value
         const validStatuses = [
             "Pending",
+            "Pre-booked",
             "Confirmed",
             "Processing",
             "Shipped",

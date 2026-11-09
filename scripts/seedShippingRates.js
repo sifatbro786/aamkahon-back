@@ -8,6 +8,7 @@
 //
 // Usage:
 //   node scripts/seedShippingRates.js
+import { SHIPPING_RATES } from "../seed/data.js";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import connectDB from "../config/database.js";
@@ -15,16 +16,13 @@ import { ShippingRate } from "../models/ShippingConfig.js";
 
 dotenv.config();
 
+
 // locationType/deliveryType combinations that are actually reachable per the
 // business rules in checkoutController.js / orderController.js:
 //   - dhaka_inside and dhaka_sub are ALWAYS "Home Delivery" (Courier isn't offered)
 //   - outside_dhaka can be either "Home Delivery" or "Courier"
-const defaultRates = [
-    { locationType: "dhaka_inside", deliveryType: "Home Delivery", baseCharge: 70 },
-    { locationType: "dhaka_sub", deliveryType: "Home Delivery", baseCharge: 100 },
-    { locationType: "outside_dhaka", deliveryType: "Home Delivery", baseCharge: 170 },
-    { locationType: "outside_dhaka", deliveryType: "Courier", baseCharge: 130 },
-];
+// Same weight-based defaults as scripts/seed.js (seed/data.js).
+const defaultRates = SHIPPING_RATES;
 
 const run = async () => {
     await connectDB();
@@ -40,12 +38,7 @@ const run = async () => {
             );
             continue;
         }
-        await ShippingRate.create({
-            ...rate,
-            codChargeType: "fixed",
-            codChargeValue: 20,
-            isActive: true,
-        });
+        await ShippingRate.create(rate);
         console.log(
             `✅ Created: ${rate.locationType} / ${rate.deliveryType} → ৳${rate.baseCharge}`,
         );

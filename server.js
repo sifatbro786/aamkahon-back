@@ -56,6 +56,8 @@ import ProductCampaignService from "./services/productCampaignService.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import connectDB from "./config/database.js";
+import inquiryRoutes from "./routes/inquiryRoutes.js";
+import inquiryAdminRoutes from "./routes/admin/inquiryAdminRoutes.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -151,6 +153,7 @@ app.use("/api", globalApiLimiter);
 // ============= PUBLIC / USER ROUTES =============
 app.use(`/api/categories`, categoryRoutes);
 app.use(`/api/products`, productRoutes);
+app.use(`/api/inquiries`, inquiryRoutes);
 app.use(`/api/auth`, authRoutes);
 app.use(`/api/cart`, cartRoutes);
 app.use(`/api/orders`, orderRoutes);
@@ -174,6 +177,7 @@ app.use(`/api/admin/analytics`, analyticsRoutes);
 app.use(`/api/admin/cart-campaigns`, adminCartRoutes);
 app.use(`/api/admin/shipping`, adminShippingRoutes);
 app.use(`/api/admin/products`, productAdminRoutes);
+app.use(`/api/admin/inquiries`, inquiryAdminRoutes);
 app.use(`/api/admin/coupons`, couponAdminRoutes);
 app.use(`/api/admin/hero-items`, heroAdminRoutes);
 app.use(`/api/admin/hero-content`, heroContentAdminRoutes);

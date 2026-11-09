@@ -6,6 +6,40 @@ import Product from "../models/Product.js";
 import { escapeRegex } from "../utils/escapeRegex.js";
 import { categoryFilterFor } from "../utils/categoryTree.js";
 
+// Multipart forms send numbers as strings and "" for empty; empty means
+// "inherit from product" for the variant wholesale price / weight.
+const toNullableNumber = (v) => (v === undefined || v === null || v === "" ? null : parseFloat(v));
+
+// wholesale / preOrder arrive as JSON strings from multipart admin forms.
+// Normalise them to typed objects before the body is spread into the doc.
+const normalizeWholesaleFields = (body) => {
+    for (const key of ["wholesale", "preOrder"]) {
+        if (typeof body[key] === "string") {
+            try {
+                body[key] = JSON.parse(body[key]);
+            } catch {
+                delete body[key];
+            }
+        }
+    }
+    if (body.wholesale && typeof body.wholesale === "object") {
+        body.wholesale = {
+            enabled: body.wholesale.enabled === true || body.wholesale.enabled === "true",
+            minQty: toNullableNumber(body.wholesale.minQty),
+            price: toNullableNumber(body.wholesale.price),
+        };
+    }
+    if (body.preOrder && typeof body.preOrder === "object") {
+        body.preOrder = {
+            expectedDate: body.preOrder.expectedDate || null,
+            advancePercent: toNullableNumber(body.preOrder.advancePercent) ?? 25,
+            maxQtyPerOrder: toNullableNumber(body.preOrder.maxQtyPerOrder),
+            note: body.preOrder.note || "",
+        };
+    }
+    if (body.minOrderQty !== undefined) body.minOrderQty = parseInt(body.minOrderQty, 10) || 1;
+};
+
 import { deleteImageFile } from "../middlewares/upload.js";
 
 const calculatePrice = (basePrice, discountType, discountValue) => {
@@ -92,6 +126,7 @@ export const resolveCampaignPricing = (productObj) => {
 
 export const createProduct = async (req, res) => {
     try {
+        normalizeWholesaleFields(req.body);
         console.log("Received product data:", req.body);
         const errors = validationResult(req);
         if (req.file) {
@@ -241,6 +276,8 @@ export const createProduct = async (req, res) => {
                             productData.discountValue ||
                             0,
                         stock: existingVariant?.stock || 0, // Default stock 0 for new variants
+                        wholesalePrice: toNullableNumber(existingVariant?.wholesalePrice),
+                        weight: toNullableNumber(existingVariant?.weight),
                         imageGroupName: existingVariant?.imageGroupName || "",
                         sku: existingVariant?.sku || `${productData.sku || "PROD"}-${index + 1}`,
                     };
@@ -298,6 +335,8 @@ export const createProduct = async (req, res) => {
                         discountValue: variantDiscountValue,
                         price: variantPrice, //  calculated price
                         stock: parseInt(variant.stock) || 0,
+                        wholesalePrice: toNullableNumber(variant.wholesalePrice),
+                        weight: toNullableNumber(variant.weight),
                         imageGroupName: variant.imageGroupName || "",
                         sku: variant.sku || "",
                     };
@@ -587,7 +626,7 @@ export const getProducts = async (req, res) => {
 
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory isUnderCampaign activeCampaignId campaignDiscount originalDiscount displayOrder publishDate purchaseCount viewCount",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory isUnderCampaign activeCampaignId campaignDiscount originalDiscount displayOrder publishDate purchaseCount viewCount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
             )
             .populate({
                 path: "category",
@@ -1068,6 +1107,7 @@ export const getAdminProductsOptimized = async (req, res) => {
 
 export const updateProduct = async (req, res) => {
     try {
+        normalizeWholesaleFields(req.body);
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({
@@ -1267,6 +1307,8 @@ export const updateProduct = async (req, res) => {
                             productData.discountValue ||
                             0,
                         stock: existingVariant?.stock || 0,
+                        wholesalePrice: toNullableNumber(existingVariant?.wholesalePrice),
+                        weight: toNullableNumber(existingVariant?.weight),
                         imageGroupName: existingVariant?.imageGroupName || "",
                         sku: existingVariant?.sku || `${productData.sku || "PROD"}-${index + 1}`,
                     };
@@ -1318,6 +1360,8 @@ export const updateProduct = async (req, res) => {
                         discountValue: variantDiscountValue,
                         price: variantPrice,
                         stock: parseInt(variant.stock) || 0,
+                        wholesalePrice: toNullableNumber(variant.wholesalePrice),
+                        weight: toNullableNumber(variant.weight),
                         imageGroupName: variant.imageGroupName || "",
                         sku: variant.sku || "",
                     };
@@ -2137,7 +2181,7 @@ export const getProductsByAttributes = async (req, res) => {
         // ৪. কোয়েরি চালানো এবং প্রোজেকশন
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory attributes",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory attributes nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
             )
             .populate({
                 path: "category",
@@ -2281,7 +2325,7 @@ export const getProductsByMultipleAttributes = async (req, res) => {
 
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory attributes",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory attributes nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
             )
             .populate({
                 path: "category",
@@ -2382,7 +2426,7 @@ export const getProductsForDynamicSection = async (req, res) => {
         // Execute query
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
             )
             .populate("category", "name slug")
             .populate("subCategory", "name slug")
@@ -2471,7 +2515,7 @@ export const getHomepageSections = async (req, res) => {
 
                 const products = await Product.find(filter)
                     .select(
-                        "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants isUnderCampaign campaignDiscount",
+                        "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants isUnderCampaign campaignDiscount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
                     )
                     .populate("category", "name slug")
                     .populate("subCategory", "name slug")
@@ -2847,7 +2891,7 @@ export const getProductsByDiscountType = async (req, res) => {
 
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
             )
             .populate("category", "name slug")
             .populate("subCategory", "name slug")
@@ -2932,7 +2976,7 @@ export const getRelatedProducts = async (req, res) => {
 
         const relatedProducts = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue thumbnail averageRating numReviews imageGroups",
+                "name slug price basePrice discountType discountValue thumbnail averageRating numReviews imageGroups nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
             )
             .populate("category", "name slug")
             .limit(parseInt(limit))
@@ -3146,7 +3190,7 @@ export const getOrderedProducts = async (req, res) => {
             .skip(skip)
             .limit(limitInt)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock displayOrder purchaseCount",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock displayOrder purchaseCount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
             )
             .lean();
 

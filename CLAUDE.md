@@ -37,6 +37,75 @@ to the base name. See `.env.example`.
 - No super_admin role. `admin` and `executive` pass the same gates
   (`ADMIN_ROLES`); there is no executive-only route. The owner account is seeded as admin.
 
+## Aamkahon business features (Phase 2)
+
+### Product fields (models/Product.js)
+`nameBn`, `unit` (box/pack/jar/kg), `priceVisibility` (show|inquiry|tba),
+`wholesale {enabled, minQty, price}`, `minOrderQty`, `availability`
+(in_stock|pre_order|out_of_season), `preOrder {expectedDate, advancePercent,
+maxQtyPerOrder, note}`, `weight` (kg, per unit). Variants add `wholesalePrice`
+and `weight`. **Variant products get wholesale only from variant.wholesalePrice**
+(no fallback to product.wholesale.price; pack sizes differ).
+
+### services/lineItemPricing.js is THE line pricer
+`priceLines(rawItems)` loads products from the DB and returns priced lines
+(unit price with wholesale tier, retailPrice, wholesaleApplied, weightKg,
+image, isPreOrder) plus itemsSubtotal / totalWeightKg / advanceBase /
+expectedDate. Used by checkout calculate, createOrder and (for display) the
+cart. Rules: inquiry/tba and out_of_season are not orderable; pre_order skips
+stock but honours maxQtyPerOrder; minOrderQty enforced; a cart cannot mix
+pre-order and in-stock lines.
+
+**Security fix (base candidate, critical):** base createOrder priced guest
+lines from `guestItems[].price` and the checkout preview did the same for all
+guests. Both now price from the DB only. The base repo still has this hole.
+
+### Weight shipping
+`ShippingRate.baseWeightKg` + `perKgCharge`:
+charge = baseCharge + ceil(max(0, totalKg - baseWeightKg)) * perKgCharge.
+perKgCharge 0 = old flat behaviour. Thresholds/coupons still apply.
+
+### Pre-booking flow
+Pre-order cart -> paymentMethod forced to SSLCommerz, `orderType: "pre_order"`,
+`codOnlinePaymentAmount` = advance (sum of line advance %, scaled by coupon),
+`remainingAmount` = the rest incl. shipping. Gateway charges the advance.
+Payment success/IPN -> `orderStatus: "Pre-booked"`, NO stock decrement.
+Admin moves it to Confirmed later; the existing updateOrderStatus transition
+decrements stock then. Payment verification uses `onlineAmountDue(order)`.
+Admin list filter: `GET /api/admin/orders?orderType=pre_order`.
+Stats include `preBookedOrders`.
+
+### Hidden prices
+`middlewares/maskHiddenPrices.js` on /api/products/* (and wishlist) nulls
+price fields for inquiry/tba products. Admins (optionalProtect) are exempt
+because the admin edit form reads GET /api/products/:id.
+
+### Inquiries
+- `POST /api/inquiries` (public, inquiryLimiter 5/15min, optional auth)
+  body `{type?, productId?, variantLabel?, quantity?, name, phone (BD mobile),
+  email?, district?, message?}` -> `201 { success, message, inquiry: {_id, type, createdAt} }`.
+  Emails MAIL_TO (escaped HTML, best effort).
+- `GET /api/admin/inquiries?status&type&search&page&limit` ->
+  `{ success, inquiries, total, totalPages, currentPage, statusCounts }`
+- `PATCH /api/admin/inquiries/:id {status?, quotedPrice?, note?}` -> `{ success, inquiry }`
+- `DELETE /api/admin/inquiries/:id`
+Statuses: new, contacted, quoted, converted, closed.
+
+### POST /api/checkout/calculate response additions
+`data.lines[]` ({product, name, variant, quantity, unit, unitPrice,
+retailPrice, wholesaleApplied, wholesalePrice, wholesaleMinQty, lineTotal,
+weightKg}), `isPreOrder`, `advanceAmount`, `expectedDate`, `totalWeightKg`,
+`shippingBreakdown {flatCharge, totalWeightKg, extraWeightKg, perKgCharge,
+weightCharge, totalShipping}`. `paymentMethod` echoes the effective one
+(SSLCommerz for pre-orders). Invalid coupons no longer fail the preview;
+`couponMessage` says why.
+
+### Seed
+`npm run seed` (create missing only) / `-- --reset` (overwrite seeded docs) /
+`-- --reset-owner-password`. Content lives in `seed/data.js`; ids are
+deterministic (`seed/ids.js`) so the static demo fixtures share them.
+`npm run seed:all` = districts + seed. Owner: solaimanislamsifat@gmail.com, role admin.
+
 ## Shape of the thing
 
 ```

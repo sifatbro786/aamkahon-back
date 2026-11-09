@@ -48,6 +48,14 @@ transporter.verify(function (error, success) {
     }
 });
 
+const escapeHtml = (v) =>
+    String(v ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
 // Email templates
 const emailTemplates = {
     emailVerification: (data) => ({
@@ -175,6 +183,29 @@ const emailTemplates = {
               Continue Shopping
             </a>
           </div>
+        </div>
+      </div>
+    `,
+    }),
+
+    // Aamkahon: new price/availability/wholesale inquiry -> store inbox.
+    // Every shopper-supplied value is HTML-escaped (rendered in the admin's
+    // mail client).
+    adminInquiry: (data) => ({
+        subject: `New ${data.type} inquiry${data.productName ? ` · ${data.productName}` : ""} - ${SITE_NAME}`,
+        html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: ${BRAND_COLOR}; color: white; padding: 16px 20px;">
+          <h2 style="margin:0">New inquiry</h2>
+        </div>
+        <div style="padding: 20px; background: #f9f9f9; line-height: 1.6;">
+          <p><b>Type:</b> ${escapeHtml(data.type)}</p>
+          ${data.productName ? `<p><b>Product:</b> ${escapeHtml(data.productName)}</p>` : ""}
+          ${data.quantity ? `<p><b>Quantity:</b> ${escapeHtml(data.quantity)} ${escapeHtml(data.unit || "")}</p>` : ""}
+          <p><b>Name:</b> ${escapeHtml(data.name)}<br/><b>Phone:</b> ${escapeHtml(data.phone)}${data.email ? `<br/><b>Email:</b> ${escapeHtml(data.email)}` : ""}</p>
+          ${data.district ? `<p><b>District:</b> ${escapeHtml(data.district)}</p>` : ""}
+          ${data.message ? `<p><b>Message:</b><br/>${escapeHtml(data.message).replace(/\n/g, "<br/>")}</p>` : ""}
+          <p style="color:#888;font-size:12px">Reply from the admin dashboard, Inquiries.</p>
         </div>
       </div>
     `,

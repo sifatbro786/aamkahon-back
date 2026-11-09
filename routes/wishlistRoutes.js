@@ -6,6 +6,7 @@ import {
     clearWishlist,
 } from "../controllers/wishlistController.js";
 import { protect } from "../middlewares/authMiddleware.js";
+import { maskHiddenPrices } from "../middlewares/maskHiddenPrices.js";
 
 const router = express.Router();
 
@@ -13,7 +14,7 @@ const router = express.Router();
 // Guests get a "sign in to save" prompt in the UI rather than a local list:
 // a saved item that vanishes when the browser is cleared is worse than an
 // honest sign-in prompt.
-router.use(protect);
+router.use(protect, maskHiddenPrices);
 
 router.route("/").get(getWishlist).post(addToWishlist).delete(clearWishlist);
 router.delete("/:productId", removeFromWishlist);
