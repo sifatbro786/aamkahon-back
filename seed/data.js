@@ -441,29 +441,20 @@ export const SECTIONS = [
 // One full screen hero (no slider). Desktop and mobile get their own media:
 // phones play the vertical orchard reel, desktop shows a landscape image until
 // a landscape video is uploaded from Admin > Homepage hero.
+// One full screen hero. Desktop: an image slider across the three product
+// lines (only the background changes; headline and buttons stay put). Phones:
+// the vertical orchard reel. Edit in Admin > Homepage hero.
+const HERO_COPY = {
+    title: "Mangoes picked late, on purpose",
+    subtitle: "Rajshahi mangoes, winter khejurer gur and gawa ghee, straight from the people who make them. Wholesale and retail.",
+    buttonText: "Pre-book mangoes",
+    buttonLink: "/shop?availability=pre_order",
+};
 export const HERO_CONTENT = [
-    {
-        key: "hero-desktop",
-        title: "Mangoes picked late, on purpose",
-        subtitle: "Rajshahi orchards to your door. Wholesale and retail, with 2027 pre-booking open now.",
-        buttonText: "Pre-book mangoes",
-        buttonLink: "/shop?availability=pre_order",
-        mediaType: "image",
-        mediaUrl: "/images/mango-cut-halves.jpg",
-        deviceType: "desktop",
-        order: 0,
-    },
-    {
-        key: "hero-mobile",
-        title: "Mangoes picked late, on purpose",
-        subtitle: "Rajshahi orchards to your door. Wholesale and retail, with 2027 pre-booking open now.",
-        buttonText: "Pre-book mangoes",
-        buttonLink: "/shop?availability=pre_order",
-        mediaType: "video",
-        mediaUrl: "/videos/hero-loop.mp4",
-        deviceType: "mobile",
-        order: 0,
-    },
+    { key: "hero-desktop", ...HERO_COPY, label: "Rajshahi mango", mediaType: "image", mediaUrl: "/images/mango-cut-halves.jpg", deviceType: "desktop", order: 0 },
+    { key: "hero-desktop-gur", ...HERO_COPY, label: "Khejurer gur", mediaType: "image", mediaUrl: "/images/gur-clay-pots.jpg", deviceType: "desktop", order: 1 },
+    { key: "hero-desktop-ghee", ...HERO_COPY, label: "Gawa ghee", mediaType: "image", mediaUrl: "/images/gawa-ghee-jars.jpg", deviceType: "desktop", order: 2 },
+    { key: "hero-mobile", ...HERO_COPY, label: "Orchard", mediaType: "video", mediaUrl: "/videos/hero-loop.mp4", deviceType: "mobile", order: 0 },
 ];
 
 export const HERO_ITEMS = [

@@ -30,6 +30,9 @@ const HeroContentSchema = mongoose.Schema(
         },
 
         // Media fields
+        // Aamkahon: short slide label shown on the desktop slider indicator
+        // (e.g. "Khejurer Gur"). Headline/button are shared across slides.
+        label: { type: String, trim: true, maxlength: 40, default: "" },
         mediaType: {
             // 'video' or 'image'
             type: String,
