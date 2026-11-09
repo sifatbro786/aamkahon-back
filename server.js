@@ -64,6 +64,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5030;
 
+// Behind nginx in production: trust exactly one proxy hop so req.ip (and the
+// rate limiters keyed on it) is the visitor, not nginx. Without this every
+// shopper shares one IP and the auth/OTP/inquiry limits trip for everyone.
+// Not enabled in dev, where X-Forwarded-For would be client-controlled.
+if (process.env.NODE_ENV === "production") app.set("trust proxy", 1);
+
 connectDB();
 
 // ═══ Middleware pipeline (Phase 0) ═══════════════════════════════════════════

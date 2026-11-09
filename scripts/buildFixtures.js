@@ -21,7 +21,9 @@ import {
     HERO_ITEMS,
     NAV_ITEMS,
     PRODUCTS,
+    REVIEWS,
     SECTIONS,
+    SEED_REVIEWERS,
     SHIPPING_RATES,
     SITE,
 } from "../seed/data.js";
@@ -182,6 +184,46 @@ const products = PRODUCTS.map((p) => {
     return doc;
 });
 
+// ─── Reviews (demo placeholder copy, see seed/data.js) ───────────────────────
+const reviewDocs = REVIEWS.map(([productKey, who, rating, comment, daysAgo], i) => {
+    const product = products.find((p) => p._id === seedId("product", productKey));
+    return {
+        _id: seedId("review", String(i)),
+        product: { _id: product._id, name: product.name, slug: product.slug },
+        user: { _id: seedId("reviewer", String(who)), name: SEED_REVIEWERS[who] },
+        rating,
+        comment,
+        status: "approved",
+        helpfulCount: 0,
+        // Relative to the fixed stamp so the JSON stays byte-stable.
+        createdAt: new Date(Date.parse(STAMP) - daysAgo * 86400000).toISOString(),
+    };
+});
+const reviewsByProduct = {};
+for (const p of products) {
+    const mine = reviewDocs.filter((r) => r.product._id === p._id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const avg = mine.length ? mine.reduce((s, r) => s + r.rating, 0) / mine.length : 0;
+    p.averageRating = Math.round(avg * 10) / 10;
+    p.numReviews = mine.length;
+    if (!mine.length) continue;
+    const counts = {};
+    mine.forEach((r) => (counts[r.rating] = (counts[r.rating] || 0) + 1));
+    // GET /api/reviews/product/:id envelope
+    reviewsByProduct[p._id] = {
+        success: true,
+        reviews: mine.map((r) => ({ ...r, product: r.product._id })),
+        totalPages: 1,
+        currentPage: 1,
+        total: mine.length,
+        ratingStats: Object.entries(counts).map(([k, c]) => ({ _id: Number(k), count: c })).sort((a, b) => a._id - b._id),
+        averageRating: avg,
+        totalReviews: mine.length,
+    };
+}
+// GET /api/reviews/featured envelope (4+ stars, 20+ chars)
+const featured = reviewDocs.filter((r) => r.rating >= 4 && r.comment.length >= 20).sort((a, b) => b.rating - a.rating || b.createdAt.localeCompare(a.createdAt));
+const reviewsResponse = { byProduct: reviewsByProduct, featured: { success: true, count: featured.length, reviews: featured } };
+
 const byDisplay = (a, b) => a.displayOrder - b.displayOrder;
 products.sort(byDisplay);
 
@@ -273,6 +315,7 @@ const files = {
     "hero-items.json": heroSlidesResponse,
     "navbar.json": navbarResponse,
     "shipping-rates.json": shippingRatesResponse,
+    "reviews.json": reviewsResponse,
 };
 
 fs.mkdirSync(OUT, { recursive: true });

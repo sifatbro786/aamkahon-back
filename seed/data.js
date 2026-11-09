@@ -438,22 +438,25 @@ export const SECTIONS = [
 ];
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
+// One full screen hero (no slider). Desktop and mobile get their own media:
+// phones play the vertical orchard reel, desktop shows a landscape image until
+// a landscape video is uploaded from Admin > Homepage hero.
 export const HERO_CONTENT = [
     {
         key: "hero-desktop",
         title: "Mangoes picked late, on purpose",
-        subtitle: "From Rajshahi orchards to your door. Wholesale and retail, with 2027 pre-booking open now.",
+        subtitle: "Rajshahi orchards to your door. Wholesale and retail, with 2027 pre-booking open now.",
         buttonText: "Pre-book mangoes",
         buttonLink: "/shop?availability=pre_order",
-        mediaType: "video",
-        mediaUrl: "/videos/hero-loop.mp4",
+        mediaType: "image",
+        mediaUrl: "/images/mango-cut-halves.jpg",
         deviceType: "desktop",
         order: 0,
     },
     {
         key: "hero-mobile",
         title: "Mangoes picked late, on purpose",
-        subtitle: "From Rajshahi orchards to your door.",
+        subtitle: "Rajshahi orchards to your door. Wholesale and retail, with 2027 pre-booking open now.",
         buttonText: "Pre-book mangoes",
         buttonLink: "/shop?availability=pre_order",
         mediaType: "video",
@@ -505,3 +508,37 @@ export const SHIPPING_RATES = [
     { locationType: "outside_dhaka", deliveryType: "Home Delivery", baseCharge: 200, baseWeightKg: 5, perKgCharge: 22 },
     { locationType: "outside_dhaka", deliveryType: "Courier", baseCharge: 160, baseWeightKg: 5, perKgCharge: 18 },
 ].map((r) => ({ ...r, codChargeType: "percentage", codChargeValue: 1, isActive: true }));
+
+
+// ─── Reviews (DEMO CONTENT) ───────────────────────────────────────────────────
+// Placeholder reviews so product pages and the homepage are not empty during
+// development and in the static demo. They are written for this seed, not
+// collected from customers. Before launch, replace them with real reviews
+// (the Facebook page has 13) or remove them:  npm run seed -- --purge-demo-reviews
+// Seed reviewers use the @seed.aamkahon.local domain so they are easy to find.
+export const SEED_REVIEWERS = [
+    "Nusrat Jahan",
+    "Mahmudul Hasan",
+    "Farzana Akter",
+    "Tanvir Rahman",
+    "Sharmin Sultana",
+    "Rakib Hossain",
+    "Ayesha Siddiqua",
+    "Imran Chowdhury",
+];
+
+// [productKey, reviewerIndex, rating, comment, daysAgo]
+export const REVIEWS = [
+    ["gopalbhog", 0, 5, "Ordered two boxes last season. Every single mango was ripe and sweet, nothing sour or chemical smelling. Booking again for 2027.", 160],
+    ["gopalbhog", 3, 5, "গত বছর গোপালভোগ নিয়েছিলাম, বাজারের আমের সাথে কোনো তুলনাই হয় না। প্যাকিংও খুব ভালো ছিল।", 150],
+    ["khirsapat", 1, 5, "Proper Rajshahi Khirsapat. The box arrived in Dhaka in two days and only one fruit was bruised, which they replaced next order.", 140],
+    ["khirsapat", 6, 4, "Very sweet and fragrant. Took one extra day to reach Sylhet, but the fruit held up fine.", 138],
+    ["langra", 2, 5, "Langra stays green so I was nervous, but they ripened perfectly on the counter in two days. Kids loved them.", 128],
+    ["amrapali", 4, 5, "আম্রপালি এত মিষ্টি হতে পারে জানতাম না। ছোট সাইজ কিন্তু স্বাদ অসাধারণ।", 122],
+    ["surma-fazli", 5, 4, "We buy Fazli in bulk for our sweet shop. Good size, fair wholesale price, and they call before dispatch.", 118],
+    ["patali-gur", 7, 5, "Real patali gur, slightly smoky and not overly sweet. You can tell there is no sugar mixed in.", 12],
+    ["patali-gur", 0, 5, "শীতের পিঠার জন্য পাটালি নিলাম। ঘ্রাণটাই আসল খেজুরের গুড়ের মতো।", 8],
+    ["jhola-gur", 3, 5, "The clay pot jhola gur is exactly like what we had in the village. Perfect for payesh.", 9],
+    ["nolen-gur", 2, 5, "Nolen gur this good is hard to find in Dhaka. Light, floral, gone in a week at our house.", 6],
+    ["gawa-ghee", 6, 4, "Grainy, nutty ghee with a proper aroma. The paper and thread seal is a lovely touch.", 20],
+];
