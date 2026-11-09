@@ -10,7 +10,8 @@
         "seed:shipping": "node scripts/seedShippingRates.js",
         "test": "echo \"No backend tests yet\" && exit 0",
         "seed": "node scripts/seed.js",
-        "seed:all": "node scripts/seedDistricts.js && node scripts/seed.js"
+        "seed:all": "node scripts/seedDistricts.js && node scripts/seed.js",
+        "fixtures": "node scripts/buildFixtures.js"
     },
     "keywords": [],
     "author": "",

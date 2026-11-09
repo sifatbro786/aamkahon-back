@@ -31,7 +31,20 @@ const getActiveHeroContent = asyncHandler(async (req, res) => {
         desktopImages,
         mobileVideos,
         mobileImages,
-        // Note: If you want to send the full object, you can group by deviceType only
+        // Additive (Aamkahon, base candidate): the URL lists above drop the
+        // admin-edited title/subtitle/button, so the storefront could never
+        // show them. Full items ride along without breaking old consumers.
+        items: activeContent.map((item) => ({
+            _id: item._id,
+            title: item.title,
+            subtitle: item.subtitle,
+            buttonText: item.buttonText,
+            buttonLink: item.buttonLink,
+            mediaType: item.mediaType,
+            mediaUrl: item.mediaUrl,
+            deviceType: item.deviceType,
+            order: item.order,
+        })),
     });
 });
 

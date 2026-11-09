@@ -534,6 +534,13 @@ export const getProducts = async (req, res) => {
             filter.stock = { $gt: 0 };
         }
 
+        // Aamkahon: season / wholesale facets for the catalogue.
+        const { availability, wholesale } = req.query;
+        if (["in_stock", "pre_order", "out_of_season"].includes(availability)) {
+            filter.availability = availability;
+        }
+        if (wholesale === "true") filter["wholesale.enabled"] = true;
+
         if (onSale === "true") {
             filter.discountType = { $ne: "none" };
             filter.discountValue = { $gt: 0 };

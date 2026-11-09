@@ -550,6 +550,11 @@ export const trackOrder = async (req, res, next) => {
                 statusHistory: order.statusHistory,
                 orderItems: order.orderItems,
                 totalPrice: order.totalPrice,
+                // Aamkahon: pre-booking advance / balance and harvest date
+                orderType: order.orderType,
+                preOrder: order.preOrder,
+                codOnlinePaymentAmount: order.codOnlinePaymentAmount,
+                totalWeightKg: order.totalWeightKg,
                 shippingPrice: order.shippingPrice,
                 discountAmount: order.discountAmount,
                 taxPrice: order.taxPrice,
