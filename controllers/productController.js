@@ -640,7 +640,7 @@ export const getProducts = async (req, res) => {
 
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory isUnderCampaign activeCampaignId campaignDiscount originalDiscount displayOrder publishDate purchaseCount viewCount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants variants category subCategory isUnderCampaign activeCampaignId campaignDiscount originalDiscount displayOrder publishDate purchaseCount viewCount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed",
             )
             .populate({
                 path: "category",
