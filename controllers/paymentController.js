@@ -185,7 +185,7 @@ export const processSuccessRedirect = async (req, res) => {
                 // Pre-booked stock does not exist yet; it is decremented when
                 // the admin confirms the order (updateOrderStatus transition).
                 if (order.orderType !== "pre_order") {
-                    await updateProductStock(order.orderItems, "decrease");
+                    await updateProductStock(order.orderItems, "decrease", null, { order, note: "Payment received" });
                 }
                 console.log("Stock updated successfully");
             } catch (stockError) {
@@ -365,7 +365,7 @@ export const handleIPN = async (req, res) => {
                 };
 
                 if (order.orderType !== "pre_order") {
-                    await updateProductStock(order.orderItems, "decrease");
+                    await updateProductStock(order.orderItems, "decrease", null, { order, note: "Payment received" });
                 }
 
                 order.adminNotes = order.adminNotes || [];
@@ -391,7 +391,7 @@ export const handleIPN = async (req, res) => {
                     remaining_amount: 0,
                 };
 
-                await updateProductStock(order.orderItems, "decrease");
+                await updateProductStock(order.orderItems, "decrease", null, { order, note: "Payment received" });
             }
 
             order.statusHistory.push({

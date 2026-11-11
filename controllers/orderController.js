@@ -11,6 +11,7 @@ import { incrementCouponUsage } from "./couponController.js";
 import { initializePayment } from "../config/sslcommerz.js";
 import { checkDeliveryChoice } from "../services/deliveryOptions.js";
 import { recordCustomerFromOrder } from "../services/customerSync.js";
+import { recordMovements } from "../services/stockLedger.js";
 
 // NOTE (Phase 3 cleanup): a dead `calculateShippingPrice()` function used to live
 // here — hardcoded to different, stale values (50/70/130) that didn't match the
@@ -28,7 +29,7 @@ import { recordCustomerFromOrder } from "../services/customerSync.js";
 // stock MUST check against this list — comparing against "Cancelled" alone (the old
 // behavior) incorrectly restores stock for orders that were still "Pending" and never
 // had stock removed in the first place, silently inflating inventory.
-const STOCK_HELD_STATUSES = ["Confirmed", "Processing", "Shipped", "Delivered", "Refunded"];
+export const STOCK_HELD_STATUSES = ["Confirmed", "Processing", "Shipped", "Delivered", "Refunded"];
 
 const ADMIN_ROLES = ["admin", "executive"];
 
@@ -63,8 +64,22 @@ const toClientOrder = (orderDoc) => {
 };
 
 // Product Stock Update
-export const updateProductStock = async (orderItems, action = "decrease", session = null) => {
+// `meta` feeds the stock ledger (models/StockMovement.js):
+//   { order?: {_id, orderNumber}, by?: userId, type?: "order"|"order_cancel"|..., note? }
+// Every product change below is one atomic findOneAndUpdate that returns the
+// document BEFORE the change, which is where the ledger's `before` comes from.
+export const updateProductStock = async (orderItems, action = "decrease", session = null, meta = {}) => {
     const opts = session ? { session } : {};
+    const ledger = [];
+    const type = meta.type || (action === "decrease" ? "order" : "order_cancel");
+    const base = {
+        type,
+        order: meta.order?._id || null,
+        orderNumber: meta.order?.orderNumber,
+        note: meta.note,
+        by: meta.by,
+    };
+
     for (const item of orderItems) {
         const delta = action === "decrease" ? -item.quantity : item.quantity;
 
@@ -105,24 +120,38 @@ export const updateProductStock = async (orderItems, action = "decrease", sessio
             const query = { _id: item.product };
             if (delta < 0) query[path] = { $gte: -delta };
             const result = await Product.findOneAndUpdate(query, { $inc: { [path]: delta } }, opts);
+            const options = product.variants[variantIndex].options.map(({ name, value }) => ({ name, value }));
+            const row = { ...base, product: item.product, productName: item.name, variantOptions: options, variantLabel: options.map((o) => o.value).join(" / ") };
             if (!result && delta < 0) {
                 console.warn(
                     `updateProductStock: insufficient variant stock for product ${item.product} — clamping to 0.`,
                 );
-                await Product.updateOne({ _id: item.product }, { $set: { [path]: 0 } }, opts);
+                const prev = await Product.findOneAndUpdate({ _id: item.product }, { $set: { [path]: 0 } }, opts);
+                const before = prev?.variants?.[variantIndex]?.stock ?? 0;
+                ledger.push({ ...row, change: -before, before, after: 0, note: `${base.note || ""} Wanted ${-delta}, only ${before} in stock (oversold).`.trim() });
+            } else if (result) {
+                const before = result.variants?.[variantIndex]?.stock ?? 0;
+                ledger.push({ ...row, change: delta, before, after: before + delta });
             }
         } else {
             const query = { _id: item.product };
             if (delta < 0) query.stock = { $gte: -delta };
             const result = await Product.findOneAndUpdate(query, { $inc: { stock: delta } }, opts);
+            const row = { ...base, product: item.product, productName: item.name };
             if (!result && delta < 0) {
                 console.warn(
                     `updateProductStock: insufficient stock for product ${item.product} — clamping to 0.`,
                 );
-                await Product.updateOne({ _id: item.product }, { $set: { stock: 0 } }, opts);
+                const prev = await Product.findOneAndUpdate({ _id: item.product }, { $set: { stock: 0 } }, opts);
+                const before = prev?.stock ?? 0;
+                ledger.push({ ...row, change: -before, before, after: 0, note: `${base.note || ""} Wanted ${-delta}, only ${before} in stock (oversold).`.trim() });
+            } else if (result) {
+                const before = result.stock ?? 0;
+                ledger.push({ ...row, change: delta, before, after: before + delta });
             }
         }
     }
+    await recordMovements(ledger, session);
 };
 
 // @desc    Create a new order
@@ -873,10 +902,10 @@ export const updateOrderStatus = async (req, res, next) => {
         const willHoldStock = STOCK_HELD_STATUSES.includes(status);
         if (wasStockHeld && !willHoldStock) {
             console.log("Restoring product stock — order left a stock-held status");
-            await updateProductStock(order.orderItems, "increase");
+            await updateProductStock(order.orderItems, "increase", null, { order, by: req.user._id, note: `Status ${order.orderStatus} -> ${status}` });
         } else if (!wasStockHeld && willHoldStock) {
             console.log("Decrementing product stock — order entered a stock-held status");
-            await updateProductStock(order.orderItems, "decrease");
+            await updateProductStock(order.orderItems, "decrease", null, { order, by: req.user._id, note: `Status ${order.orderStatus} -> ${status}` });
         }
         console.log("Order status update completed");
         res.status(200).json({
@@ -921,7 +950,7 @@ export const updatePaymentStatus = async (req, res, next) => {
         }
 
         // Validate payment status
-        const validStatuses = ["Pending", "Paid", "Failed", "Refunded"];
+        const validStatuses = ["Pending", "Partial", "Paid", "Failed", "Refunded"];
         if (!validStatuses.includes(paymentStatus)) {
             return res.status(400).json({
                 success: false,
@@ -1030,7 +1059,7 @@ export const deleteOrder = async (req, res, next) => {
         // deleted never had stock decremented, so restoring it here used to inflate
         // inventory. Only restore when the order was actually holding stock.
         if (STOCK_HELD_STATUSES.includes(order.orderStatus)) {
-            await updateProductStock(order.orderItems, "increase");
+            await updateProductStock(order.orderItems, "increase", null, { order, by: req.user._id, note: "Order deleted" });
         }
         await Order.findByIdAndDelete(req.params.id);
         res.status(200).json({
@@ -1130,8 +1159,8 @@ export const updateOrderDetails = async (req, res, next) => {
             // Pending orders never had stock decremented, so item edits on them correctly
             // leave stock untouched.
             if (STOCK_HELD_STATUSES.includes(order.orderStatus)) {
-                await updateProductStock(order.orderItems, "increase", session);
-                await updateProductStock(newOrderItems, "decrease", session);
+                await updateProductStock(order.orderItems, "increase", session, { order, by: req.user._id, note: "Items edited (old lines)" });
+                await updateProductStock(newOrderItems, "decrease", session, { order, by: req.user._id, note: "Items edited (new lines)" });
             }
 
             order.orderItems = newOrderItems;

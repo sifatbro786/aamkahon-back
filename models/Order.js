@@ -20,6 +20,9 @@ const orderItemSchema = new mongoose.Schema({
     unit: { type: String },
     weightKg: { type: Number, default: 0 },
     image: { type: String },
+    // Phone orders only: admin typed the unit price (negotiated / wholesale by
+    // phone). retailPrice still holds the catalogue price for comparison.
+    priceOverridden: { type: Boolean, default: false },
 });
 
 const shippingAddressSchema = new mongoose.Schema(
@@ -176,9 +179,18 @@ const orderSchema = new mongoose.Schema(
         paymentMethod: {
             type: String,
             required: true,
-            enum: ["COD", "SSLCommerz"],
+            // Manual = phone order paid outside the site (cash, personal bKash,
+            // bank). Never goes through the gateway; see manualPayment.
+            enum: ["COD", "SSLCommerz", "Manual"],
         },
         paymentResult: paymentResultSchema,
+        // web = storefront checkout, phone = created by an admin from a call.
+        orderSource: { type: String, enum: ["web", "phone"], default: "web", index: true },
+        manualPayment: {
+            method: { type: String, enum: ["cash", "bkash", "nagad", "rocket", "bank", "card", "other"] },
+            reference: { type: String, trim: true, maxlength: 120 },
+            paidAmount: { type: Number, min: 0, default: 0 },
+        },
         shippingPrice: {
             type: Number,
             required: true,
@@ -223,7 +235,8 @@ const orderSchema = new mongoose.Schema(
         },
         paymentStatus: {
             type: String,
-            enum: ["Pending", "Paid", "Failed", "Refunded"],
+            // Partial: phone order with an advance taken (manualPayment.paidAmount).
+            enum: ["Pending", "Partial", "Paid", "Failed", "Refunded"],
             default: "Pending",
         },
         statusHistory: [orderStatusHistorySchema],

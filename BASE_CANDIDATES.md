@@ -34,6 +34,10 @@ Ordered by priority. "Generic" = no Aamkahon-specific logic, port as-is.
 - Customer / lead book with CSV import/export (`models/Customer.js`, customerController,
   `utils/phone.js`, customerSync). Generic for any BD store.
 - `Product.codAllowed` (online-only products). Generic.
+- Stock ledger (StockMovement + stockLedger + updateProductStock meta) and admin Stock page. Generic.
+- Phone orders (manualOrderController, Order.orderSource/manualPayment, "Manual" method,
+  "Partial" payment status) and the printable invoice page. Generic for any BD shop that
+  sells by phone too.
 10. Weight-based shipping: `ShippingRate.baseWeightKg` + `perKgCharge` (0 = old flat behaviour) + admin fields.
 11. Price visibility (`show|inquiry|tba`) + `maskHiddenPrices` middleware + Inquiry module (model, public route
     with limiter, admin inbox).

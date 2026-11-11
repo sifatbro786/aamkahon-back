@@ -13,7 +13,7 @@ import { priceLines } from "../services/lineItemPricing.js";
  *   dhaka_outside → outside_dhaka
  *   other_district→ outside_dhaka
  */
-const shippingZoneToLocationType = (shippingZone) => {
+export const shippingZoneToLocationType = (shippingZone) => {
     switch (shippingZone) {
         case "dhaka_city":
             return "dhaka_inside";

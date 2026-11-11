@@ -127,6 +127,26 @@ deterministic (`seed/ids.js`) so the static demo fixtures share them.
 - **Online only products**: `Product.codAllowed` (default true). `priceLines` returns
   `codAvailable`; calculate/createOrder force SSLCommerz when false; calculate response has
   `codAvailable`. Cart populate selects include it.
+- **Phone orders** `controllers/admin/manualOrderController.js` (admin only):
+  `POST /api/admin/orders/manual/preview` -> `{ success, totals, lines, warnings }`,
+  `POST /api/admin/orders/manual` -> 201 `{ success, order, warnings }`.
+  Body `{ customer:{name, phone, email?}, address:{district, upazila, addressLine1?, addressLine2?},
+  deliveryType?, courierBranch?, items:[{productId, options?, quantity, unitPrice?}], discount?,
+  shippingCharge?, payment:{method, paidAmount?, reference?}, status: Pending|Confirmed|Pre-booked, note? }`.
+  Admin may override unit price (priceOverridden) and delivery charge; totals are still
+  computed server side. Inquiry/TBA products need a typed price. Same product+variant on two
+  lines is summed for the stock check. Order gets paymentMethod "Manual", orderSource "phone",
+  paymentStatus Pending|Partial|Paid, manualPayment, codOnlinePaymentAmount = paid,
+  remainingAmount = due. Confirmed decrements stock in the same transaction.
+- **Stock ledger** `models/StockMovement.js`, `services/stockLedger.js`. `updateProductStock`
+  now takes `(items, action, session, meta {order, by, note, type})` and logs every change.
+  Product create/update log opening stock / form edits as "correction".
+  `/api/admin/stock`: `GET /` `?search&status=low|out&availability&page&limit` ->
+  `{ success, items, total, totalPages, currentPage, summary }` (also the phone order product
+  picker); `POST /adjust {productId, options?, mode: in|out|set, quantity, type, note?}` ->
+  `{ success, before, after, movement }`; `GET /movements?product&type&from&to&page` ->
+  `{ success, movements, total, totalPages, currentPage }`.
+  `STOCK_HELD_STATUSES` is exported from orderController.
 
 ## Shape of the thing
 

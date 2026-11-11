@@ -43,6 +43,7 @@ const normalizeWholesaleFields = (body) => {
 };
 
 import { deleteImageFile } from "../middlewares/upload.js";
+import { recordProductEditDiff } from "../services/stockLedger.js";
 
 const calculatePrice = (basePrice, discountType, discountValue) => {
     const base = parseFloat(basePrice) || 0;
@@ -429,6 +430,9 @@ export const createProduct = async (req, res) => {
         // Create product
         const product = new Product(productData);
         const savedProduct = await product.save();
+        // Opening stock goes into the ledger so later history adds up from zero.
+        recordProductEditDiff({ _id: savedProduct._id, hasVariants: savedProduct.hasVariants, stock: 0, variants: [] }, savedProduct, req.user?._id, "Opening stock")
+            .catch(() => {});
 
         // Populate category and subCategory for response
         await savedProduct.populate("category subCategory");
@@ -1481,6 +1485,8 @@ export const updateProduct = async (req, res) => {
                 message: "Product not found",
             });
         }
+        // Stock ledger: the form sets stock absolutely; log what changed.
+        recordProductEditDiff(existingProduct, product, req.user?._id).catch(() => {});
 
         res.status(200).json({
             success: true,
