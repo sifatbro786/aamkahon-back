@@ -51,6 +51,12 @@ const dynamicSectionSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
+        // Aamkahon: empty = every season; otherwise shown on the homepage only
+        // while one of these seasons is active (services/storefront.js).
+        seasons: {
+            type: [{ type: String, enum: ["mango", "winter", "all"] }],
+            default: [],
+        },
         sectionType: {
             type: String,
             enum: ["attribute-based", "featured", "category-based", "manual"],

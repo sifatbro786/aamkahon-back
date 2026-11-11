@@ -15,6 +15,8 @@ import mongoose from "mongoose";
 
 import Category from "../models/Category.js";
 import DynamicSection from "../models/DynamicSection.js";
+import Faq from "../models/Faq.js";
+import StorefrontSettings from "../models/StorefrontSettings.js";
 import HeroItem from "../models/Hero.js";
 import HeroContent from "../models/HeroContent.js";
 import NavbarConfig from "../models/NavbarConfig.js";
@@ -24,6 +26,7 @@ import { ShippingRate } from "../models/ShippingConfig.js";
 import User from "../models/User.js";
 import {
     CATEGORIES,
+    FAQS,
     HERO_CONTENT,
     HERO_ITEMS,
     NAV_ITEMS,
@@ -31,6 +34,7 @@ import {
     PRODUCTS,
     REVIEWS,
     SECTIONS,
+    STOREFRONT,
     SEED_REVIEWERS,
     SHIPPING_RATES,
 } from "../seed/data.js";
@@ -142,6 +146,22 @@ async function seedHero() {
     for (const h of HERO_ITEMS) {
         const { key, ...data } = h;
         await upsertById(HeroItem, seedId("heroItem", key), { ...data, isActive: true }, `hero slide ${h.title}`);
+    }
+}
+
+async function seedStorefront() {
+    // Singleton: created once, overwritten only with --reset (admin edits win).
+    const exists = await StorefrontSettings.exists({ key: "main" });
+    if (exists && !RESET) {
+        stats.skipped += 1;
+    } else {
+        await StorefrontSettings.findOneAndUpdate({ key: "main" }, { $set: { key: "main", ...STOREFRONT } }, { upsert: true, setDefaultsOnInsert: true });
+        stats[exists ? "updated" : "created"] += 1;
+        console.log(`  ${exists ? "~" : "+"} storefront settings`);
+    }
+    for (const [i, f] of FAQS.entries()) {
+        const { key, ...data } = f;
+        await upsertById(Faq, seedId("faq", key), { ...data, order: i, isActive: true, showOnHomepage: true }, `faq ${key}`);
     }
 }
 
@@ -269,6 +289,7 @@ async function run() {
         await seedProducts(categoryIds);
         await seedSections(owner._id);
         await seedHero();
+        await seedStorefront();
         await seedNavbar(categoryIds);
         await seedShipping();
         if (WITH_DEMO_REVIEWS) await seedReviews();

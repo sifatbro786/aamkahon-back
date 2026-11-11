@@ -713,6 +713,10 @@ export const getAllOrders = async (req, res, next) => {
         if (paymentStatus && paymentStatus !== "all") filter.paymentStatus = paymentStatus;
         // Pre-bookings list in admin = ?orderType=pre_order
         if (orderType === "pre_order" || orderType === "regular") filter.orderType = orderType;
+        // Admin screens: ?view=prebookings (waiting for harvest) | orders (everything
+        // that ships now, incl. pre-bookings once Confirmed). See viewScope.
+        const scope = viewScope(req.query.view);
+        if (scope) filter.$and = [scope];
 
         // Search functionality
         if (search) {
@@ -724,9 +728,11 @@ export const getAllOrders = async (req, res, next) => {
             ];
         }
 
-        // Sort
-        const sort = {};
-        sort[sortBy] = sortOrder === "desc" ? -1 : 1;
+        // Sort. Whitelisted: the key comes from the query string.
+        // "preOrder.expectedDate" = harvest date, used by the Pre-bookings screen.
+        const SORTABLE = ["createdAt", "totalPrice", "preOrder.expectedDate"];
+        const sort = { [SORTABLE.includes(sortBy) ? sortBy : "createdAt"]: sortOrder === "desc" ? -1 : 1 };
+        if (!sort.createdAt) sort.createdAt = -1;
 
         // Execute query
         const orders = await Order.find(filter)
@@ -753,15 +759,33 @@ export const getAllOrders = async (req, res, next) => {
 // @desc    Get order statistics (Admin)
 // @route   GET /api/admin/orders/stats
 // @access  Private/Admin
+// A pre-booking is a "pre-booking" while it waits (Pending = advance not paid
+// yet, Pre-booked = advance paid). Once the admin confirms it, it is an order to
+// pack like any other, so it moves to the Orders screen.
+const PRE_WAITING = ["Pending", "Pre-booked"];
+export const viewScope = (view) => {
+    if (view === "prebookings") return { orderType: "pre_order", orderStatus: { $in: PRE_WAITING } };
+    if (view === "orders") return { $or: [{ orderType: { $ne: "pre_order" } }, { orderStatus: { $nin: PRE_WAITING } }] };
+    return null;
+};
+
 export const getOrderStats = async (req, res, next) => {
     try {
-        const totalOrders = await Order.countDocuments();
-        const pendingOrders = await Order.countDocuments({ orderStatus: "Pending" });
-        const deliveredOrders = await Order.countDocuments({ orderStatus: "Delivered" });
-        const preBookedOrders = await Order.countDocuments({ orderStatus: "Pre-booked" });
+        // ?view=orders|prebookings scopes every figure (Orders vs Pre-bookings screens).
+        const scope = viewScope(req.query.view) || {};
+        const totalOrders = await Order.countDocuments(scope);
+        const pendingOrders = await Order.countDocuments({ ...scope, orderStatus: "Pending" });
+        const deliveredOrders = await Order.countDocuments({ ...scope, orderStatus: "Delivered" });
+        const preBookedOrders = await Order.countDocuments({ ...scope, orderStatus: "Pre-booked" });
         const totalRevenue = await Order.aggregate([
-            { $match: { orderStatus: "Delivered" } },
+            { $match: { ...scope, orderStatus: "Delivered" } },
             { $group: { _id: null, total: { $sum: "$totalPrice" } } },
+        ]);
+        // Pre-bookings: advance in hand and balance still to collect, for live
+        // bookings only (advance verified = left Pending; not cancelled/refunded/delivered).
+        const preMoney = await Order.aggregate([
+            { $match: { orderType: "pre_order", orderStatus: { $in: ["Pre-booked", "Confirmed", "Processing", "Shipped"] } } },
+            { $group: { _id: null, advance: { $sum: "$codOnlinePaymentAmount" }, balance: { $sum: "$remainingAmount" } } },
         ]);
 
         // Last 7 days orders
@@ -769,6 +793,7 @@ export const getOrderStats = async (req, res, next) => {
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
         const recentOrders = await Order.countDocuments({
+            ...scope,
             createdAt: { $gte: sevenDaysAgo },
         });
 
@@ -777,6 +802,7 @@ export const getOrderStats = async (req, res, next) => {
         const monthlyRevenue = await Order.aggregate([
             {
                 $match: {
+                    ...scope,
                     orderStatus: "Delivered",
                     createdAt: { $gte: new Date(new Date().getFullYear(), currentMonth, 1) },
                 },
@@ -791,6 +817,8 @@ export const getOrderStats = async (req, res, next) => {
                 pendingOrders,
                 deliveredOrders,
                 preBookedOrders,
+                preOrderAdvance: preMoney[0]?.advance || 0,
+                preOrderBalance: preMoney[0]?.balance || 0,
                 totalRevenue: totalRevenue[0]?.total || 0,
                 monthlyRevenue: monthlyRevenue[0]?.total || 0,
                 recentOrders,

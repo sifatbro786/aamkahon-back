@@ -44,6 +44,7 @@ const normalizeWholesaleFields = (body) => {
 
 import { deleteImageFile } from "../middlewares/upload.js";
 import { recordProductEditDiff } from "../services/stockLedger.js";
+import { getActiveSeason, seasonMatch } from "../services/storefront.js";
 
 const calculatePrice = (basePrice, discountType, discountValue) => {
     const base = parseFloat(basePrice) || 0;
@@ -1474,6 +1475,21 @@ export const updateProduct = async (req, res) => {
             `Variant Info: hasVariants=${productData.hasVariants}, variantCount=${productData.variants?.length || 0}`,
         );
 
+        // Stock is NOT edited from the product form (Aamkahon, base candidate).
+        // The form used to send an absolute number loaded minutes earlier, so an
+        // order paid in between was silently undone. Stock changes go through
+        // the Stock page (atomic + ledger) and orders only. Simple products:
+        // leave `stock` out of the update entirely. Variant products: the
+        // variants array is replaced as a whole, so carry each variant's current
+        // stock over by its options (exact match, same rule as
+        // updateProductStock); a new variant starts at 0.
+        delete productData.stock;
+        if (Array.isArray(productData.variants) && existingProduct) {
+            const vKey = (opts = []) => opts.map((o) => `${o.name}=${o.value}`).sort().join("|");
+            const current = new Map((existingProduct.variants || []).map((v) => [vKey(v.options), v.stock || 0]));
+            productData.variants = productData.variants.map((v) => ({ ...v, stock: current.get(vKey(v.options)) ?? 0 }));
+        }
+
         const product = await Product.findByIdAndUpdate(req.params.id, productData, {
             new: true,
             runValidators: true,
@@ -2494,13 +2510,16 @@ export const getHomepageSections = async (req, res) => {
     try {
         console.log("Fetching homepage sections...");
 
+        // Season-tagged sections only while their season is active.
+        const activeSeason = await getActiveSeason();
         const sections = await DynamicSection.find({
             isActive: true,
             showInHomepage: true,
+            ...seasonMatch(activeSeason),
         })
             .sort({ displayOrder: 1, createdAt: -1 })
             .select(
-                "title description attributeKey attributeValue productLimit backgroundColor textColor sectionType sortBy sortOrder isActive displayOrder showInHomepage",
+                "title description attributeKey attributeValue productLimit backgroundColor textColor sectionType sortBy sortOrder isActive displayOrder showInHomepage seasons",
             )
             .lean();
 
@@ -2593,6 +2612,7 @@ export const createDynamicSection = async (req, res) => {
             displayOrder = 0,
             backgroundColor = "#ffffff",
             textColor = "#000000",
+            seasons = [],
         } = req.body;
 
         // Check if a section with the same attribute pair already exists.
@@ -2614,6 +2634,7 @@ export const createDynamicSection = async (req, res) => {
         }
 
         const section = new DynamicSection({
+            seasons: Array.isArray(seasons) ? seasons.filter((x) => ["mango", "winter", "all"].includes(x)) : [],
             title,
             description,
             attributeKey,

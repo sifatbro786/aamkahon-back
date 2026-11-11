@@ -2,12 +2,23 @@
 
 import { asyncHandler } from "../utils/asyncHandler.js";
 import HeroContent from "../models/HeroContent.js";
+import { getActiveSeason } from "../services/storefront.js";
 
 // @desc    Get all active hero content, grouped by device type
 // @route   GET /api/hero
 // @access  Public
 const getActiveHeroContent = asyncHandler(async (req, res) => {
-    const activeContent = await HeroContent.find({ isActive: true }).sort({ order: 1 });
+    const all = await HeroContent.find({ isActive: true }).sort({ order: 1 });
+    // Season filter per device: keep "all" + the active season's media. If a
+    // device ends up with nothing (e.g. no winter phone video yet), fall back
+    // to every active item for that device, so the hero is never empty.
+    const season = await getActiveSeason();
+    const fits = (i) => !i.season || i.season === "all" || i.season === season;
+    const activeContent = ["desktop", "mobile"].flatMap((d) => {
+        const forDevice = all.filter((i) => i.deviceType === d);
+        const inSeason = forDevice.filter(fits);
+        return inSeason.length ? inSeason : forDevice;
+    });
 
     // Group content for frontend
     const desktopVideos = activeContent
@@ -44,6 +55,7 @@ const getActiveHeroContent = asyncHandler(async (req, res) => {
             mediaType: item.mediaType,
             mediaUrl: item.mediaUrl,
             deviceType: item.deviceType,
+            season: item.season || "all",
             order: item.order,
         })),
     });
@@ -74,9 +86,11 @@ const createHeroContent = asyncHandler(async (req, res) => {
         order,
         isActive,
         label,
+        season,
     } = req.body;
 
     const newContent = new HeroContent({
+        season: ["all", "mango", "winter"].includes(season) ? season : "all",
         title,
         subtitle,
         buttonText,
@@ -108,6 +122,7 @@ const updateHeroContent = asyncHandler(async (req, res) => {
         order,
         isActive,
         label,
+        season,
     } = req.body;
     const content = await HeroContent.findById(req.params.id);
 
@@ -122,6 +137,7 @@ const updateHeroContent = asyncHandler(async (req, res) => {
         content.deviceType = deviceType || content.deviceType;
         content.order = order !== undefined ? order : content.order;
         content.isActive = isActive !== undefined ? isActive : content.isActive;
+        if (["all", "mango", "winter"].includes(season)) content.season = season;
 
         const updatedContent = await content.save();
         res.json(updatedContent);

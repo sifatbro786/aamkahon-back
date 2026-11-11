@@ -17,6 +17,8 @@ import { fileURLToPath } from "url";
 
 import {
     CATEGORIES,
+    FAQS,
+    STOREFRONT,
     HERO_CONTENT,
     HERO_ITEMS,
     NAV_ITEMS,
@@ -240,6 +242,7 @@ const sectionsResponse = {
             description: s.description,
             attributeKey: s.attributeKey,
             attributeValue: s.attributeValue,
+            seasons: s.seasons || [],
             productLimit: s.productLimit,
             sortBy: s.sortBy,
             sortOrder: s.sortOrder,
@@ -305,6 +308,14 @@ const shippingRatesResponse = {
     lowestFreeShippingThreshold: null,
 };
 
+// ─── Storefront content + FAQ ─────────────────────────────────────────────────
+// Raw shapes; the emulator applies the active-season filter like the API does.
+const storefrontResponse = { success: true, ...STOREFRONT };
+const faqsResponse = {
+    success: true,
+    faqs: FAQS.map(({ key, ...f }, i) => ({ _id: seedId("faq", key), ...f, order: i, isActive: true, showOnHomepage: true })),
+};
+
 // ─── Write ────────────────────────────────────────────────────────────────────
 const files = {
     "site.json": SITE,
@@ -316,6 +327,8 @@ const files = {
     "navbar.json": navbarResponse,
     "shipping-rates.json": shippingRatesResponse,
     "reviews.json": reviewsResponse,
+    "storefront.json": storefrontResponse,
+    "faqs.json": faqsResponse,
 };
 
 fs.mkdirSync(OUT, { recursive: true });

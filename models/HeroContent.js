@@ -54,6 +54,11 @@ const HeroContentSchema = mongoose.Schema(
             enum: ["desktop", "mobile"],
         },
 
+        // Aamkahon: which season this media belongs to. "all" shows every
+        // season; mango/winter only while that season is active (Admin >
+        // Homepage & season). Old records have no value and count as "all".
+        season: { type: String, enum: ["all", "mango", "winter"], default: "all" },
+
         // Optional: To control the order of slides
         order: {
             type: Number,

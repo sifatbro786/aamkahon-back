@@ -24,6 +24,9 @@ export const SITE = {
     facebook: "https://www.facebook.com/AAMKAHON",
 };
 
+// Owner's words from the Facebook bio (also in amkahon-front lib/site.js).
+const SITE_BIO_BN = "আম কেবল একটি ফলের নাম নয় বরং আম জড়িয়ে থাকে আমাদের স্বপ্ন এবং সম্ভবনায় তাই এর শুদ্ধতা আমাদের অঙ্গীকার।";
+
 export const OWNER = {
     name: "Solaiman Islam Sifat",
     email: "solaimanislamsifat@gmail.com",
@@ -419,6 +422,9 @@ export const SECTIONS = [
         description: "Lock today's price with a 25% advance. Pay the rest on delivery.",
         attributeKey: "Season",
         attributeValue: "Pre-booking 2027",
+        // Pre-booking runs before the harvest; in mango season the in-season
+        // shelf takes over (add it in Admin > Product sections, tag "mango").
+        seasons: ["winter", "all"],
         productLimit: 8,
         sortBy: "createdAt",
         sortOrder: "asc",
@@ -430,6 +436,7 @@ export const SECTIONS = [
         description: "From the date palms of Rajshahi and Jashore.",
         attributeKey: "Season",
         attributeValue: "Winter 2026",
+        seasons: ["winter", "all"],
         productLimit: 8,
         sortBy: "createdAt",
         sortOrder: "asc",
@@ -451,10 +458,10 @@ const HERO_COPY = {
     buttonLink: "/shop?availability=pre_order",
 };
 export const HERO_CONTENT = [
-    { key: "hero-desktop", ...HERO_COPY, label: "Rajshahi mango", mediaType: "image", mediaUrl: "/images/mango-cut-halves.jpg", deviceType: "desktop", order: 0 },
-    { key: "hero-desktop-gur", ...HERO_COPY, label: "Khejurer gur", mediaType: "image", mediaUrl: "/images/gur-clay-pots.jpg", deviceType: "desktop", order: 1 },
-    { key: "hero-desktop-ghee", ...HERO_COPY, label: "Gawa ghee", mediaType: "image", mediaUrl: "/images/gawa-ghee-jars.jpg", deviceType: "desktop", order: 2 },
-    { key: "hero-mobile", ...HERO_COPY, label: "Orchard", mediaType: "video", mediaUrl: "/videos/hero-loop.mp4", deviceType: "mobile", order: 0 },
+    { key: "hero-desktop", ...HERO_COPY, season: "mango", label: "Rajshahi mango", mediaType: "image", mediaUrl: "/images/mango-cut-halves.jpg", deviceType: "desktop", order: 0 },
+    { key: "hero-desktop-gur", ...HERO_COPY, season: "winter", label: "Khejurer gur", mediaType: "image", mediaUrl: "/images/gur-clay-pots.jpg", deviceType: "desktop", order: 1 },
+    { key: "hero-desktop-ghee", ...HERO_COPY, season: "all", label: "Gawa ghee", mediaType: "image", mediaUrl: "/images/gawa-ghee-jars.jpg", deviceType: "desktop", order: 2 },
+    { key: "hero-mobile", ...HERO_COPY, season: "all", label: "Orchard", mediaType: "video", mediaUrl: "/videos/hero-loop.mp4", deviceType: "mobile", order: 0 },
 ];
 
 export const HERO_ITEMS = [
@@ -532,4 +539,108 @@ export const REVIEWS = [
     ["jhola-gur", 3, 5, "The clay pot jhola gur is exactly like what we had in the village. Perfect for payesh.", 9],
     ["nolen-gur", 2, 5, "Nolen gur this good is hard to find in Dhaka. Light, floral, gone in a week at our house.", 6],
     ["gawa-ghee", 6, 4, "Grainy, nutty ghee with a proper aroma. The paper and thread seal is a lovely touch.", 20],
+];
+
+// ─── Storefront content (Admin > Homepage & season) ───────────────────────────
+// November: gur is in stock and 2027 mango pre-booking is open, so winter is
+// active. The owner switches season from the admin; copy below is a start.
+export const STOREFRONT = {
+    activeSeason: "winter",
+    seasons: {
+        winter: {
+            announcement: "Khejurer gur is in stock now. 2027 mango pre-booking is open.",
+            heroEyebrow: "Rajshahi · winter",
+            heroTitle: "Gur from the winter tap",
+            heroSubtitle: "Patali, jhola and nolen gur boiled over a wood fire, no sugar added. 2027 mango pre-booking is open too.",
+            heroButtonText: "Shop winter gur",
+            heroButtonLink: "/shop?category=khejurer-gur",
+            heroSecondaryText: "Pre-book 2027 mangoes",
+            heroSecondaryLink: "/shop?availability=pre_order",
+            blocks: { seasonBoard: true, harvestCalendar: true, wholesaleBand: false, testimonials: true, orchardReels: true, delivery: true, story: true, faq: true },
+        },
+        mango: {
+            announcement: "Mango season is on. Picked late, packed the same day.",
+            heroEyebrow: "Rajshahi · mango season",
+            heroTitle: "Mangoes picked late, on purpose",
+            heroSubtitle: "Gopalbhog, Khirsapat, Langra and more, ripened on the tree and packed the day they are picked.",
+            heroButtonText: "Shop mangoes",
+            heroButtonLink: "/shop?category=mango",
+            heroSecondaryText: "Wholesale by phone",
+            heroSecondaryLink: "/wholesale",
+            blocks: { seasonBoard: false, harvestCalendar: true, wholesaleBand: true, testimonials: true, orchardReels: true, delivery: true, story: true, faq: true },
+        },
+        all: {
+            announcement: "Gawa ghee all year. Ask us about the next mango and gur season.",
+            heroEyebrow: "Rajshahi · since 2021",
+            heroTitle: "The story of mangoes",
+            heroSubtitle: HERO_COPY.subtitle,
+            heroButtonText: "Shop now",
+            heroButtonLink: "/shop",
+            heroSecondaryText: "Our story",
+            heroSecondaryLink: "/story",
+            blocks: { seasonBoard: true, harvestCalendar: true, wholesaleBand: true, testimonials: true, orchardReels: true, delivery: true, story: true, faq: true },
+        },
+    },
+    // Owner spotlight on /story and the homepage story block. Name left empty
+    // on purpose: the client fills it in Admin > Our story.
+    story: {
+        ownerName: "",
+        ownerRole: "Founder, Aamkahon",
+        ownerPhoto: "/images/founder-jar-display.jpg",
+        ownerPhotoAlt: "The founder of Aamkahon with jars of gur and ghee",
+        quote: SITE_BIO_BN,
+        quoteLang: "bn",
+        note: "A mango is not just a fruit. Our dreams and our livelihood grow with it, so keeping it pure is our promise.",
+        facts: [
+            { label: "Started", value: "2021" },
+            { label: "Orchards", value: "Rajshahi" },
+            { label: "Delivered to", value: "64 districts" },
+        ],
+    },
+};
+
+// Plain text answers. `seasons` empty = always shown.
+export const FAQS = [
+    {
+        key: "prebook",
+        question: "How does mango pre-booking work?",
+        answer: "You pay an advance online (the percentage is shown on each product) and we hold your box for the harvest. The expected date is on the product page. The rest is paid when the mangoes reach you.",
+        seasons: ["winter", "all"],
+    },
+    {
+        key: "cod",
+        question: "Can I pay cash on delivery?",
+        answer: "For most orders, yes: you pay the delivery charge and a small COD fee online, and the rest to the courier. Some products travel with couriers that do not collect cash, so those are paid in full online. Checkout shows which applies to your bag.",
+        seasons: [],
+    },
+    {
+        key: "delivery-charge",
+        question: "How is the delivery charge worked out?",
+        answer: "By your area and the weight of the parcel. The exact amount is shown at checkout before you pay.",
+        seasons: [],
+    },
+    {
+        key: "where",
+        question: "Where do you deliver?",
+        answer: "Anywhere in Bangladesh. Choose home delivery, or pick up from a courier branch in your district where available.",
+        seasons: [],
+    },
+    {
+        key: "wholesale",
+        question: "Do you sell wholesale?",
+        answer: "Yes, in season. Call or WhatsApp us with the variety and quantity and we will quote you.",
+        seasons: [],
+    },
+    {
+        key: "chemicals",
+        question: "Are your mangoes ripened with chemicals?",
+        answer: "No. No formalin, no carbide, no ripening spray. We wait for the fruit to ripen on the tree before picking.",
+        seasons: ["mango", "all"],
+    },
+    {
+        key: "gur-pure",
+        question: "Is your gur made with sugar?",
+        answer: "No. The sap is boiled down over a wood fire with no sugar and no hydros, which is why it is a little darker than market gur.",
+        seasons: ["winter", "all"],
+    },
 ];

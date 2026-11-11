@@ -148,6 +148,23 @@ deterministic (`seed/ids.js`) so the static demo fixtures share them.
   `{ success, movements, total, totalPages, currentPage }`.
   `STOCK_HELD_STATUSES` is exported from orderController.
 
+## Phase 7 additions (2026-11-12)
+
+- **Season CMS**: `models/StorefrontSettings.js` (key "main"), `services/storefront.js`
+  (`getActiveSeason`, `seasonMatch` for array fields, `seasonValueMatch`).
+  `GET /api/storefront` -> `{ success, activeSeason, content, story }`;
+  `GET /api/storefront/faqs?homepage=true` -> `{ success, faqs:[{_id, question, answer}] }`.
+  Admin: `GET|PUT /api/admin/storefront` (PUT writes only listed fields with dotted $set;
+  links must start with "/" or http(s)), `/api/admin/faqs` GET/POST, `PUT /reorder {ids}`,
+  `PUT /:id`, `DELETE /:id`. `HeroContent.season` (all|mango|winter) and
+  `DynamicSection.seasons` filter /api/hero and /api/products/homepage-sections.
+- **Admin order views**: `GET /api/admin/orders?view=orders|prebookings` and
+  `/stats?view=` (`viewScope` in orderController). Pre-bookings = pre_order in Pending or
+  Pre-booked; Confirmed ones count as orders. `sortBy` whitelisted
+  (createdAt, totalPrice, preOrder.expectedDate). Stats add preOrderAdvance/preOrderBalance.
+- **Product stock is not editable through updateProduct** (create still takes opening
+  stock). Use `/api/admin/stock/adjust`.
+
 ## Shape of the thing
 
 ```

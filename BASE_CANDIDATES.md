@@ -30,7 +30,12 @@ Ordered by priority. "Generic" = no Aamkahon-specific logic, port as-is.
   "Dhaka = home delivery only" rule and validates courierBranch against the admin list
   (base accepted any string). Generic.
 
+- updateProduct no longer writes stock from the form (lost-update bug: an order between
+  form load and save was undone). Generic, high value.
+- getAllOrders `sortBy` whitelist. Generic.
+
 ## Optional features (configurable, off by default)
+- Storefront settings + FAQ module (season keys are Aamkahon specific; the pattern is generic).
 - Customer / lead book with CSV import/export (`models/Customer.js`, customerController,
   `utils/phone.js`, customerSync). Generic for any BD store.
 - `Product.codAllowed` (online-only products). Generic.
