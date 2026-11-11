@@ -3,6 +3,7 @@ import { validationResult } from "express-validator";
 import Inquiry from "../models/Inquiry.js";
 import Product from "../models/Product.js";
 import { sendEmail } from "../services/emailService.js";
+import { recordCustomerFromInquiry } from "../services/customerSync.js";
 import { escapeRegex } from "../utils/escapeRegex.js";
 
 const STATUSES = ["new", "contacted", "quoted", "converted", "closed"];
@@ -47,6 +48,8 @@ export const createInquiry = async (req, res, next) => {
             message,
             user: req.user?._id || null,
         });
+
+        recordCustomerFromInquiry(inquiry); // lead book, best effort
 
         // Best effort: a mail outage must not lose the inquiry, it is already saved.
         const to = process.env.MAIL_TO || process.env.SMTP_USER;

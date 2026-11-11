@@ -19,7 +19,7 @@ export const getCart = async (req, res, next) => {
             // Without it every line reported unlimited stock, the shopper could
             // click past what exists, and the server then rejected the update
             // and snapped the number back, which reads as a broken control.
-            select: "name slug imageGroups variants hasVariants price basePrice stock discountPercentage stockStatus isActive unit priceVisibility wholesale minOrderQty availability preOrder nameBn weight",
+            select: "name slug imageGroups variants hasVariants price basePrice stock discountPercentage stockStatus isActive unit priceVisibility wholesale minOrderQty availability preOrder codAllowed nameBn weight",
         });
 
         if (!cart) {
@@ -132,7 +132,7 @@ export const getCart = async (req, res, next) => {
             // Without it every line reported unlimited stock, the shopper could
             // click past what exists, and the server then rejected the update
             // and snapped the number back, which reads as a broken control.
-            select: "name slug imageGroups variants hasVariants price basePrice stock discountPercentage stockStatus isActive unit priceVisibility wholesale minOrderQty availability preOrder nameBn weight",
+            select: "name slug imageGroups variants hasVariants price basePrice stock discountPercentage stockStatus isActive unit priceVisibility wholesale minOrderQty availability preOrder codAllowed nameBn weight",
             });
         }
 
@@ -406,7 +406,7 @@ export const addItemToCart = async (req, res, next) => {
         await cart.save();
         cart = await Cart.findById(cart._id).populate(
             "items.product",
-            "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder nameBn",
+            "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder codAllowed nameBn",
         );
         console.log("Cart saved successfully, total items:", cart.items.length);
 
@@ -462,7 +462,7 @@ export const mergeGuestCart = async (req, res, next) => {
     if (items.length === 0) {
         const existing = await Cart.findOne({ user: req.user.id }).populate(
             "items.product",
-            "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder nameBn",
+            "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder codAllowed nameBn",
         );
         return res.status(200).json({
             success: true,
@@ -583,7 +583,7 @@ export const mergeGuestCart = async (req, res, next) => {
         }
 
         await cart.save();
-        await cart.populate("items.product", "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder nameBn");
+        await cart.populate("items.product", "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder codAllowed nameBn");
 
         res.status(200).json({ success: true, cart, merged, skipped });
     } catch (error) {
@@ -617,7 +617,7 @@ export const updateCartItem = async (req, res, next) => {
     try {
         const cart = await Cart.findOne({ user: req.user.id }).populate(
             "items.product",
-            "name price basePrice stock variants hasVariants isActive" + " unit priceVisibility wholesale minOrderQty availability preOrder nameBn weight",
+            "name price basePrice stock variants hasVariants isActive" + " unit priceVisibility wholesale minOrderQty availability preOrder codAllowed nameBn weight",
         );
 
         if (!cart) {
@@ -660,7 +660,7 @@ export const updateCartItem = async (req, res, next) => {
         item.quantity = qtyInt;
         item.priceAtPurchase = unitPriceFor(product, liveVariant, qtyInt).unitPrice;
         await cart.save();
-        await cart.populate("items.product", "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder nameBn");
+        await cart.populate("items.product", "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder codAllowed nameBn");
 
         res.status(200).json({ success: true, cart });
     } catch (error) {
@@ -690,6 +690,6 @@ export const removeItemFromCart = asyncHandler(async (req, res) => {
 
     cart.items.pull({ _id: req.params.itemId });
     await cart.save();
-    await cart.populate("items.product", "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder nameBn");
+    await cart.populate("items.product", "name slug imageGroups variants hasVariants stock price unit priceVisibility wholesale minOrderQty availability preOrder codAllowed nameBn");
     res.status(200).json({ success: true, cart });
 });

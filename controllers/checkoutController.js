@@ -1,10 +1,7 @@
 import Cart from "../models/Cart.js";
 import { CourierBranch, District, ShippingRate } from "../models/ShippingConfig.js";
-import {
-    applyCouponLogic,
-    computeOrderTotals,
-    isHomeDeliveryOnly,
-} from "../services/pricingService.js";
+import { applyCouponLogic, computeOrderTotals } from "../services/pricingService.js";
+import { checkDeliveryChoice, findCourierRecord, resolveDeliveryOptions } from "../services/deliveryOptions.js";
 import { priceLines } from "../services/lineItemPricing.js";
 
 // ─── Zone Helpers ─────────────────────────────────────────────────────────────
@@ -107,40 +104,13 @@ export const getUpazilas = async (req, res) => {
 // @access  Public
 export const getCourierBranches = async (req, res) => {
     try {
-        const { district } = req.params;
-
-        console.log("🔍 Searching for district:", district);
-
-        const record = await CourierBranch.findOne({
-            district: { $regex: new RegExp(`^${district}$`, "i") },
-            isActive: true,
-        });
-
-        if (record) {
-            console.log("✅ Found:", record.district, "Branches:", record.branches);
-            return res.status(200).json({
-                success: true,
-                branches: record.branches,
-            });
-        }
-
-        const allActive = await CourierBranch.find({ isActive: true }).select("district");
-        console.log(
-            "📋 Available districts with courier service:",
-            allActive.map((r) => r.district),
-        );
-
-        res.status(200).json({
-            success: true,
-            branches: [],
-        });
+        // Escaped, case-insensitive lookup (the base built a RegExp straight
+        // from the URL param) and no console noise per request.
+        const record = await findCourierRecord(req.params.district);
+        res.status(200).json({ success: true, branches: record?.branches || [] });
     } catch (error) {
-        console.error("❌ Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch courier branches",
-            branches: [],
-        });
+        console.error("Get courier branches error:", error.message);
+        res.status(500).json({ success: false, message: "Failed to fetch courier branches", branches: [] });
     }
 };
 
@@ -170,9 +140,7 @@ export const validateLocation = async (req, res) => {
 
         const locationType = shippingZoneToLocationType(upazilaObj.shippingZone);
 
-        const availableDeliveryTypes = isHomeDeliveryOnly(locationType)
-            ? ["Home Delivery"]
-            : ["Courier", "Home Delivery"];
+        const { types: availableDeliveryTypes } = await resolveDeliveryOptions({ locationType, district });
 
         res.status(200).json({
             success: true,
@@ -216,9 +184,7 @@ export const validateLocationType = async (req, res) => {
             success: true,
             locationType,
             shippingZone: upazilaObj.shippingZone,
-            availableDeliveryTypes: isHomeDeliveryOnly(locationType)
-                ? ["Home Delivery"]
-                : ["Courier", "Home Delivery"],
+            availableDeliveryTypes: (await resolveDeliveryOptions({ locationType, district })).types,
         });
     } catch (error) {
         console.error("Validate location type error:", error);
@@ -289,30 +255,18 @@ export const calculateCheckoutData = async (req, res, next) => {
             });
         }
 
-        let finalDeliveryType = deliveryType;
-        if (isHomeDeliveryOnly(locationType)) {
-            if (deliveryType === "Courier") {
-                return res.status(400).json({
-                    success: false,
-                    message: `Courier service not available for ${locationType === "dhaka_inside" ? "Dhaka Inside" : "Dhaka Sub"}`,
-                });
-            }
-            finalDeliveryType = "Home Delivery";
-        } else {
-            if (!deliveryType || !["Courier", "Home Delivery"].includes(deliveryType)) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Valid delivery type is required for outside Dhaka (Courier/Home Delivery)",
-                });
-            }
-            if (deliveryType === "Courier" && !courierBranch) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Courier branch selection is required",
-                });
-            }
+        // Offered types come from admin data (rates + courier branches), not a
+        // hard coded Dhaka rule. See services/deliveryOptions.js.
+        const delivery = await checkDeliveryChoice({
+            locationType,
+            district: shippingAddress?.district,
+            deliveryType,
+            courierBranch,
+        });
+        if (!delivery.ok) {
+            return res.status(400).json({ success: false, message: delivery.message });
         }
+        const finalDeliveryType = delivery.deliveryType;
 
         if (!paymentMethod || !["COD", "SSLCommerz"].includes(paymentMethod)) {
             return res.status(400).json({
@@ -321,7 +275,8 @@ export const calculateCheckoutData = async (req, res, next) => {
             });
         }
         // Pre-bookings always pay an advance online; COD does not apply.
-        const effectivePaymentMethod = isPreOrder ? "SSLCommerz" : paymentMethod;
+        // Online only when the bag holds a no-COD product (e.g. mango by AJR).
+        const effectivePaymentMethod = isPreOrder || !priced.codAvailable ? "SSLCommerz" : paymentMethod;
         const isCOD = effectivePaymentMethod === "COD";
 
         // ─── Step 4: Coupon (an invalid code must not break the preview) ──
@@ -370,6 +325,7 @@ export const calculateCheckoutData = async (req, res, next) => {
                         paymentMethod: effectivePaymentMethod,
                         isCOD,
                         isPreOrder,
+                        codAvailable: priced.codAvailable,
                         codCharge: 0,
                         codOnlinePaymentAmount: 0,
                         advanceAmount: 0,
@@ -448,6 +404,8 @@ export const calculateCheckoutData = async (req, res, next) => {
                 paymentMethod: effectivePaymentMethod,
                 isCOD,
                 isPreOrder,
+                // false: the bag has a product that must be paid in full online.
+                codAvailable: priced.codAvailable,
                 totalWeightKg,
                 courierBranch: finalDeliveryType === "Courier" ? courierBranch : null,
                 couponMessage,

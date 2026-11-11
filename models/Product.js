@@ -203,6 +203,11 @@ const productSchema = new mongoose.Schema(
             maxQtyPerOrder: { type: Number, min: 1, default: null },
             note: { type: String, trim: true },
         },
+        // false = this product must be paid in full online (item + delivery).
+        // Mango ships through couriers like AJR that take no cash on delivery.
+        // One such line makes the whole order online only
+        // (services/lineItemPricing.js codAvailable).
+        codAllowed: { type: Boolean, default: true },
         // ============= END WHOLESALE / PRE-BOOKING =============
         isFeatured: { type: Boolean, default: false },
         isActive: { type: Boolean, default: true },

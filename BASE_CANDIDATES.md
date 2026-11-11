@@ -25,7 +25,15 @@ Ordered by priority. "Generic" = no Aamkahon-specific logic, port as-is.
 8. `findVariantByOptions` requires equal option count (base `every()` matched a subset, e.g. [] matched any variant).
 9. `npm start` = plain node (nodemon was the production start command). Unused deps removed.
 
+## Correctness (2026-11-11)
+- Data-driven delivery options (`services/deliveryOptions.js`): removes the hard coded
+  "Dhaka = home delivery only" rule and validates courierBranch against the admin list
+  (base accepted any string). Generic.
+
 ## Optional features (configurable, off by default)
+- Customer / lead book with CSV import/export (`models/Customer.js`, customerController,
+  `utils/phone.js`, customerSync). Generic for any BD store.
+- `Product.codAllowed` (online-only products). Generic.
 10. Weight-based shipping: `ShippingRate.baseWeightKg` + `perKgCharge` (0 = old flat behaviour) + admin fields.
 11. Price visibility (`show|inquiry|tba`) + `maskHiddenPrices` middleware + Inquiry module (model, public route
     with limiter, admin inbox).

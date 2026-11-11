@@ -58,6 +58,7 @@ import { fileURLToPath } from "url";
 import connectDB from "./config/database.js";
 import inquiryRoutes from "./routes/inquiryRoutes.js";
 import inquiryAdminRoutes from "./routes/admin/inquiryAdminRoutes.js";
+import customerAdminRoutes from "./routes/admin/customerAdminRoutes.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -184,6 +185,7 @@ app.use(`/api/admin/cart-campaigns`, adminCartRoutes);
 app.use(`/api/admin/shipping`, adminShippingRoutes);
 app.use(`/api/admin/products`, productAdminRoutes);
 app.use(`/api/admin/inquiries`, inquiryAdminRoutes);
+app.use(`/api/admin/customers`, customerAdminRoutes);
 app.use(`/api/admin/coupons`, couponAdminRoutes);
 app.use(`/api/admin/hero-items`, heroAdminRoutes);
 app.use(`/api/admin/hero-content`, heroContentAdminRoutes);

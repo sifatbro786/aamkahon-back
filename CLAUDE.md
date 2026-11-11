@@ -106,6 +106,28 @@ weightCharge, totalShipping}`. `paymentMethod` echoes the effective one
 deterministic (`seed/ids.js`) so the static demo fixtures share them.
 `npm run seed:all` = districts + seed. Owner: solaimanislamsifat@gmail.com, role admin.
 
+## Phase 6 additions (2026-11-11)
+
+- **Delivery options** `services/deliveryOptions.js` (`resolveDeliveryOptions`, `checkDeliveryChoice`):
+  a type is offered when an active ShippingRate exists for (locationType, deliveryType); Courier
+  also needs an active CourierBranch for the district with >= 1 branch. Used by validate-location,
+  checkout calculate and createOrder. `courierBranch` must be one of the configured branches.
+  `isHomeDeliveryOnly` no longer exists. Order.shippingAddress.addressLine1 is required unless Courier.
+- **Customers** `models/Customer.js`, `controllers/admin/customerController.js`,
+  `/api/admin/customers`:
+  - `GET /` `?search&tag&source&district&optIn&sort&page&limit` ->
+    `{ success, customers, total, totalPages, currentPage, tags, sourceCounts }`
+  - `POST /` -> 201 `{ success, customer }` | 409 duplicate phone; `PATCH /:id`; `DELETE /:id`
+  - `POST /import` `{ rows:[{rowNumber?, phone, name?, email?, district?, address?, tags?}], tags?, mode: skip|update, batch? }`
+    (max 2000 rows/request) -> `{ success, batch, received, inserted, updated, unchanged, invalid, duplicatesInFile, errors }`
+  - `GET /export` -> text/csv (UTF-8 BOM; opted-out excluded unless `optIn` given; cells escaped against CSV injection)
+  Phone identity: `utils/phone.js normalizeBdPhone` -> "01XXXXXXXXX". Orders and inquiries
+  upsert customers (`services/customerSync.js`, best effort, after commit). Backfill:
+  `npm run sync:customers`.
+- **Online only products**: `Product.codAllowed` (default true). `priceLines` returns
+  `codAvailable`; calculate/createOrder force SSLCommerz when false; calculate response has
+  `codAvailable`. Cart populate selects include it.
+
 ## Shape of the thing
 
 ```

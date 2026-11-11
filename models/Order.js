@@ -27,16 +27,12 @@ const shippingAddressSchema = new mongoose.Schema(
         name: { type: String, required: true },
         phone: { type: String, required: true },
         email: { type: String },
+        // Not needed for courier pickup, in any zone (Dhaka can have courier
+        // branches now). Every order since the base stores deliveryType.
         addressLine1: {
             type: String,
             required: function () {
-                const deliveryType = this.deliveryType;
-                const locationType = this.locationType;
-                return (
-                    deliveryType === "Home Delivery" ||
-                    locationType === "dhaka_inside" ||
-                    locationType === "dhaka_sub"
-                );
+                return this.deliveryType !== "Courier";
             },
         },
         addressLine2: { type: String },

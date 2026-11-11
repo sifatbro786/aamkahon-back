@@ -107,7 +107,7 @@ const imageFor = (product, variant) => {
 
 const PRICING_FIELDS =
     "name slug price basePrice stock isActive hasVariants variants imageGroups category " +
-    "unit priceVisibility wholesale minOrderQty availability preOrder weight";
+    "unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed";
 
 /**
  * Price a list of raw lines.
@@ -188,6 +188,7 @@ export const priceLines = async (rawItems, { session = null, stockCheck = true }
             image: imageFor(product, variant),
             category: product.category,
             isPreOrder,
+            codAllowed: product.codAllowed !== false,
             advancePercent: isPreOrder ? Number(product.preOrder?.advancePercent ?? 25) : 0,
             expectedDate: isPreOrder ? product.preOrder?.expectedDate || null : null,
         });
@@ -214,6 +215,8 @@ export const priceLines = async (rawItems, { session = null, stockCheck = true }
         itemsSubtotal: round2(lines.reduce((a, l) => a + l.lineTotal, 0)),
         totalWeightKg: round2(lines.reduce((a, l) => a + l.weightKg, 0)),
         isPreOrder,
+        // COD needs every line to allow it (and is never offered for pre-bookings).
+        codAvailable: !isPreOrder && lines.every((l) => l.codAllowed),
         // Sum of each line's own advance share, before any coupon.
         advanceBase: isPreOrder
             ? round2(lines.reduce((a, l) => a + (l.lineTotal * l.advancePercent) / 100, 0))

@@ -38,6 +38,8 @@ const normalizeWholesaleFields = (body) => {
         };
     }
     if (body.minOrderQty !== undefined) body.minOrderQty = parseInt(body.minOrderQty, 10) || 1;
+    // Multipart forms send booleans as strings.
+    if (body.codAllowed !== undefined) body.codAllowed = !(body.codAllowed === false || body.codAllowed === "false");
 };
 
 import { deleteImageFile } from "../middlewares/upload.js";
@@ -633,7 +635,7 @@ export const getProducts = async (req, res) => {
 
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory isUnderCampaign activeCampaignId campaignDiscount originalDiscount displayOrder publishDate purchaseCount viewCount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory isUnderCampaign activeCampaignId campaignDiscount originalDiscount displayOrder publishDate purchaseCount viewCount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed",
             )
             .populate({
                 path: "category",
@@ -2188,7 +2190,7 @@ export const getProductsByAttributes = async (req, res) => {
         // ৪. কোয়েরি চালানো এবং প্রোজেকশন
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory attributes nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory attributes nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed",
             )
             .populate({
                 path: "category",
@@ -2332,7 +2334,7 @@ export const getProductsByMultipleAttributes = async (req, res) => {
 
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory attributes nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants category subCategory attributes nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed",
             )
             .populate({
                 path: "category",
@@ -2433,7 +2435,7 @@ export const getProductsForDynamicSection = async (req, res) => {
         // Execute query
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed",
             )
             .populate("category", "name slug")
             .populate("subCategory", "name slug")
@@ -2522,7 +2524,7 @@ export const getHomepageSections = async (req, res) => {
 
                 const products = await Product.find(filter)
                     .select(
-                        "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants isUnderCampaign campaignDiscount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
+                        "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants isUnderCampaign campaignDiscount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed",
                     )
                     .populate("category", "name slug")
                     .populate("subCategory", "name slug")
@@ -2898,7 +2900,7 @@ export const getProductsByDiscountType = async (req, res) => {
 
         const products = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock hasVariants nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed",
             )
             .populate("category", "name slug")
             .populate("subCategory", "name slug")
@@ -2983,7 +2985,7 @@ export const getRelatedProducts = async (req, res) => {
 
         const relatedProducts = await Product.find(filter)
             .select(
-                "name slug price basePrice discountType discountValue thumbnail averageRating numReviews imageGroups nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
+                "name slug price basePrice discountType discountValue thumbnail averageRating numReviews imageGroups nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed",
             )
             .populate("category", "name slug")
             .limit(parseInt(limit))
@@ -3197,7 +3199,7 @@ export const getOrderedProducts = async (req, res) => {
             .skip(skip)
             .limit(limitInt)
             .select(
-                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock displayOrder purchaseCount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight",
+                "name slug price basePrice discountType discountValue imageGroups averageRating numReviews stock displayOrder purchaseCount nameBn unit priceVisibility wholesale minOrderQty availability preOrder weight codAllowed",
             )
             .lean();
 

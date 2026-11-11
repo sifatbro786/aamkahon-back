@@ -9,6 +9,8 @@ import { escapeRegex } from "../utils/escapeRegex.js";
 import { incrementCouponUsage } from "./couponController.js";
 
 import { initializePayment } from "../config/sslcommerz.js";
+import { checkDeliveryChoice } from "../services/deliveryOptions.js";
+import { recordCustomerFromOrder } from "../services/customerSync.js";
 
 // NOTE (Phase 3 cleanup): a dead `calculateShippingPrice()` function used to live
 // here — hardcoded to different, stale values (50/70/130) that didn't match the
@@ -155,26 +157,18 @@ export const createOrder = async (req, res, next) => {
         }
 
         // ─── deliveryType validation ──────────────────────────────────────────────
+        // Same rule as the checkout preview (services/deliveryOptions.js):
+        // offered types come from active rates + the district's courier branches.
         let finalDeliveryType = deliveryType;
-        const isHomeOnly = locationType === "dhaka_inside" || locationType === "dhaka_sub";
-
-        if (isHomeOnly) {
-            // Dhaka Inside ও Dhaka Sub —
-            if (finalDeliveryType && finalDeliveryType === "Courier") {
-                validationErrors.push(
-                    `Courier service not available for ${locationType === "dhaka_inside" ? "Dhaka Inside" : "Dhaka Sub"}`,
-                );
-            }
-            finalDeliveryType = "Home Delivery";
-        } else if (locationType === "outside_dhaka") {
-            if (!finalDeliveryType || !["Courier", "Home Delivery"].includes(finalDeliveryType)) {
-                validationErrors.push(
-                    "Valid delivery type is required for outside Dhaka (Courier/Home Delivery)",
-                );
-            }
-            if (finalDeliveryType === "Courier" && !courierBranch) {
-                validationErrors.push("Courier branch selection is required");
-            }
+        if (locationType && validLocationTypes.includes(locationType)) {
+            const delivery = await checkDeliveryChoice({
+                locationType,
+                district: shippingAddress?.district,
+                deliveryType,
+                courierBranch,
+            });
+            if (delivery.ok) finalDeliveryType = delivery.deliveryType;
+            else validationErrors.push(delivery.message);
         }
 
         // ─── paymentMethod validation ─────────────────────────────────────────────
@@ -246,7 +240,8 @@ export const createOrder = async (req, res, next) => {
 
         const isPreOrder = priced.isPreOrder;
         // Pre-bookings always pay their advance online, whatever was posted.
-        const effectivePaymentMethod = isPreOrder ? "SSLCommerz" : paymentMethod;
+        // Online only when the bag holds a no-COD product (e.g. mango by AJR).
+        const effectivePaymentMethod = isPreOrder || !priced.codAvailable ? "SSLCommerz" : paymentMethod;
         const isCOD = effectivePaymentMethod === "COD";
 
         const finalOrderItems = priced.lines.map((l) => ({
@@ -363,6 +358,7 @@ export const createOrder = async (req, res, next) => {
                     await Cart.findOneAndDelete({ user: req.user.id }).session(session);
                 }
                 await session.commitTransaction();
+                recordCustomerFromOrder(newOrder); // lead book, best effort
                 // FIX: usedCount was never incremented anywhere in the codebase,
                 // so maxUsage limits were effectively unenforced. Done outside the
                 // transaction (best-effort, non-blocking) after commit succeeds.
@@ -440,6 +436,7 @@ export const createOrder = async (req, res, next) => {
 
                 await newOrder.save({ session, validateBeforeSave: false });
                 await session.commitTransaction();
+                recordCustomerFromOrder(newOrder); // lead book, best effort
                 if (couponCode) incrementCouponUsage(couponCode);
                 return res.status(201).json({
                     success: true,

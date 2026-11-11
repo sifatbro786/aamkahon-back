@@ -14,8 +14,8 @@ import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import { ShippingRate } from "../models/ShippingConfig.js";
 
-export const isHomeDeliveryOnly = (locationType) =>
-    locationType === "dhaka_inside" || locationType === "dhaka_sub";
+// isHomeDeliveryOnly removed: delivery options are data driven now
+// (services/deliveryOptions.js), Dhaka can have courier branches.
 
 export const calculateCODCharge = (rateDoc, orderAmountAfterDiscount) => {
     if (rateDoc.codChargeType === "percentage") {
