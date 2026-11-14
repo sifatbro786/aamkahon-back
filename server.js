@@ -62,6 +62,7 @@ import customerAdminRoutes from "./routes/admin/customerAdminRoutes.js";
 import stockAdminRoutes from "./routes/admin/stockAdminRoutes.js";
 import storefrontRoutes from "./routes/storefrontRoutes.js";
 import { faqRouter, settingsRouter as storefrontAdminRoutes } from "./routes/admin/storefrontAdminRoutes.js";
+import { runExclusive } from "./services/jobLock.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -216,7 +217,12 @@ app.get("/health", (req, res) => {
 
 cron.schedule("* * * * *", async () => {
     try {
-        const result = await ProductCampaignService.processAllActiveCampaigns();
+        // One process at a time (services/jobLock.js): safe under pm2 cluster
+        // or more than one server. 50 s TTL < the 1 minute schedule.
+        const result = await runExclusive("campaign-cron", 50_000, () =>
+            ProductCampaignService.processAllActiveCampaigns(),
+        );
+        if (result?.skipped) return;
         if (result.started.length > 0 || result.ended.length > 0) {
             console.log(`Campaign Update:`);
             if (result.started.length > 0) {
@@ -231,10 +237,7 @@ cron.schedule("* * * * *", async () => {
                     console.log(`      - ${c.name}: ${c.productsRolledBack} total roleback`),
                 );
             }
-        } else {
-            console.log(`No new campaign start or end`);
         }
-        console.log(`========================================`);
     } catch (error) {
         console.error(`Having some problem to start campaign:`, error.message);
         console.error(error);

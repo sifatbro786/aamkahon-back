@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { verifyPayment } from "../config/sslcommerz.js";
 import Order from "../models/Order.js";
 import { updateProductStock } from "./orderController.js";
+import { debug } from "../utils/logger.js";
 
 // Partial online payments: COD (delivery + COD fee up front) and pre-bookings
 // (the advance). Both keep the online part in codOnlinePaymentAmount and the
@@ -63,7 +64,7 @@ const buildOrderResultUrl = (clientUrl, path, order, extraParams = {}) => {
 
 export const processSuccessRedirect = async (req, res) => {
     console.log("PROCESS SUCCESS REDIRECT CALLED");
-    console.log("Query params:", req.query);
+    debug("Query params:", req.query);
 
     try {
         const { orderId, val_id, status, tran_id } = req.query;
@@ -308,7 +309,7 @@ export const processCancelRedirect = async (req, res) => {
 
 export const handleIPN = async (req, res) => {
     console.log("IPN RECEIVED");
-    console.log("IPN Body:", req.body);
+    debug("IPN Body:", req.body);
 
     const { tran_id, status, val_id, amount } = req.body;
 

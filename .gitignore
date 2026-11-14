@@ -32,3 +32,4 @@ uploads/*
 *.njsproj
 *.sln
 *.sw?
+CLAUDE outputs

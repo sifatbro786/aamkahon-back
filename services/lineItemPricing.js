@@ -49,14 +49,18 @@ export const unitPriceFor = (product, variant, quantity) => {
         ? Number(variant.wholesalePrice) || 0
         : Number(w.price) || 0;
     const minQty = Number(w.minQty) || 0;
-    const tierReached = Boolean(w.enabled && wholesalePrice > 0 && minQty > 0 && quantity >= minQty);
+    // WHOLESALE_TIER=on in .env turns the automatic tier on. Aamkahon keeps it
+    // off: wholesale is agreed by phone and entered as a phone order with the
+    // agreed price. Must match NEXT_PUBLIC_WHOLESALE_TIER in the storefront.
+    const tierOn = process.env.WHOLESALE_TIER === "on";
+    const tierReached = Boolean(tierOn && w.enabled && wholesalePrice > 0 && minQty > 0 && quantity >= minQty);
     const unitPrice = tierReached ? Math.min(retail, wholesalePrice) : retail;
 
     return {
         unitPrice: round2(unitPrice),
         retailPrice: round2(retail),
-        wholesalePrice: w.enabled && wholesalePrice > 0 ? round2(wholesalePrice) : null,
-        wholesaleMinQty: w.enabled && minQty > 0 ? minQty : null,
+        wholesalePrice: tierOn && w.enabled && wholesalePrice > 0 ? round2(wholesalePrice) : null,
+        wholesaleMinQty: tierOn && w.enabled && minQty > 0 ? minQty : null,
         wholesaleApplied: tierReached && wholesalePrice < retail,
     };
 };

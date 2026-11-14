@@ -45,6 +45,7 @@ const normalizeWholesaleFields = (body) => {
 import { deleteImageFile } from "../middlewares/upload.js";
 import { recordProductEditDiff } from "../services/stockLedger.js";
 import { getActiveSeason, seasonMatch } from "../services/storefront.js";
+import { debug } from "../utils/logger.js";
 
 const calculatePrice = (basePrice, discountType, discountValue) => {
     const base = parseFloat(basePrice) || 0;
@@ -131,7 +132,7 @@ export const resolveCampaignPricing = (productObj) => {
 export const createProduct = async (req, res) => {
     try {
         normalizeWholesaleFields(req.body);
-        console.log("Received product data:", req.body);
+        debug("Received product data:", req.body);
         const errors = validationResult(req);
         if (req.file) {
             req.body.mainImage = `${process.env.BASE_URL || "http://localhost:5010"}/uploads/products/${req.file.filename}`;
@@ -423,7 +424,7 @@ export const createProduct = async (req, res) => {
             productData.metaKeywords = req.body.metaKeywords;
         }
 
-        console.log("Processed product data:", productData);
+        debug("Processed product data:", productData);
         console.log(
             `Variant Info: hasVariants=${productData.hasVariants}, variantCount=${productData.variants?.length || 0}`,
         );
@@ -1469,8 +1470,8 @@ export const updateProduct = async (req, res) => {
             }
         }
 
-        console.log("Updating product with data:", productData);
-        console.log("Bullet Points:", productData.bulletPoints);
+        debug("Updating product with data:", productData);
+        debug("Bullet Points:", productData.bulletPoints);
         console.log(
             `Variant Info: hasVariants=${productData.hasVariants}, variantCount=${productData.variants?.length || 0}`,
         );

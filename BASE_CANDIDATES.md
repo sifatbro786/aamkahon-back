@@ -1,3 +1,11 @@
+> **Ported to Footpath on 2026-11-14:** line pricing, dotenv first, trust proxy,
+> review email leak, checkout calculate rewrite, category tree, SMTP/TLS, hero
+> items + video upload, variant equal-count match, npm start, unused deps,
+> delivery options, weight shipping, codAllowed, customer list, stock ledger +
+> stock page, phone orders + invoice, stock-safe product edits, sortBy whitelist,
+> PII-free logging, cron lock. Not ported (Aamkahon specific): wholesale tier,
+> pre-booking, hidden prices + inquiries, season CMS, FAQ, owner story.
+
 # Changes to carry back into the Footpath base
 
 Ordered by priority. "Generic" = no Aamkahon-specific logic, port as-is.

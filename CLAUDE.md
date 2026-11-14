@@ -165,6 +165,16 @@ deterministic (`seed/ids.js`) so the static demo fixtures share them.
 - **Product stock is not editable through updateProduct** (create still takes opening
   stock). Use `/api/admin/stock/adjust`.
 
+## 2026-11-14
+
+- **Automatic wholesale tier is OFF** (`WHOLESALE_TIER=on` in .env turns it on;
+  storefront `NEXT_PUBLIC_WHOLESALE_TIER` must match). The client sells wholesale
+  by phone at agreed prices (phone orders). Fields and code stay for other clients.
+- `utils/logger.js` (`debug()` + `redact()`), no PII in logs.
+- Campaign cron under `services/jobLock.js` (safe with several processes).
+- Everything generic from Aamkahon is now in the Footpath base too (see
+  BASE_CANDIDATES.md, "Ported").
+
 ## Shape of the thing
 
 ```
