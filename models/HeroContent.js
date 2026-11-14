@@ -45,6 +45,10 @@ const HeroContentSchema = mongoose.Schema(
             required: [true, "Media URL is required"],
             trim: true,
         },
+        // Aamkahon: still image for a video record. Shown before the first
+        // frame arrives (slow networks, Data Saver), when autoplay is refused,
+        // for reduced motion, and if the video fails. Ignored for images.
+        posterUrl: { type: String, trim: true, maxlength: 500, default: "" },
 
         // Device specific field
         deviceType: {

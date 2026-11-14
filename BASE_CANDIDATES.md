@@ -48,6 +48,8 @@ Ordered by priority. "Generic" = no Aamkahon-specific logic, port as-is.
   `utils/phone.js`, customerSync). Generic for any BD store.
 - `Product.codAllowed` (online-only products). Generic.
 - Stock ledger (StockMovement + stockLedger + updateProductStock meta) and admin Stock page. Generic.
+- Hero video poster (`HeroContent.posterUrl`) + express-validator rules on admin hero-content
+  writes (safe URL check for media/poster/button links: blocks javascript:/data:). Generic.
 - Phone orders (manualOrderController, Order.orderSource/manualPayment, "Manual" method,
   "Partial" payment status) and the printable invoice page. Generic for any BD shop that
   sells by phone too.

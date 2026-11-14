@@ -461,7 +461,7 @@ export const HERO_CONTENT = [
     { key: "hero-desktop", ...HERO_COPY, season: "mango", label: "Rajshahi mango", mediaType: "image", mediaUrl: "/images/mango-cut-halves.jpg", deviceType: "desktop", order: 0 },
     { key: "hero-desktop-gur", ...HERO_COPY, season: "winter", label: "Khejurer gur", mediaType: "image", mediaUrl: "/images/gur-clay-pots.jpg", deviceType: "desktop", order: 1 },
     { key: "hero-desktop-ghee", ...HERO_COPY, season: "all", label: "Gawa ghee", mediaType: "image", mediaUrl: "/images/gawa-ghee-jars.jpg", deviceType: "desktop", order: 2 },
-    { key: "hero-mobile", ...HERO_COPY, season: "all", label: "Orchard", mediaType: "video", mediaUrl: "/videos/hero-loop.mp4", deviceType: "mobile", order: 0 },
+    { key: "hero-mobile", ...HERO_COPY, season: "all", label: "Orchard", mediaType: "video", mediaUrl: "/videos/hero-loop.mp4", posterUrl: "/videos/hero-poster.jpg", deviceType: "mobile", order: 0 },
 ];
 
 export const HERO_ITEMS = [

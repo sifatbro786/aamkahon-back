@@ -2,7 +2,16 @@
 
 import { asyncHandler } from "../utils/asyncHandler.js";
 import HeroContent from "../models/HeroContent.js";
+import { validationResult } from "express-validator";
 import { getActiveSeason } from "../services/storefront.js";
+
+// Rules live in routes/admin/heroContentAdminRoutes.js.
+const rejectInvalid = (req, res) => {
+    const errors = validationResult(req);
+    if (errors.isEmpty()) return false;
+    res.status(400).json({ success: false, message: errors.array()[0].msg, errors: errors.array() });
+    return true;
+};
 
 // @desc    Get all active hero content, grouped by device type
 // @route   GET /api/hero
@@ -54,6 +63,7 @@ const getActiveHeroContent = asyncHandler(async (req, res) => {
             label: item.label,
             mediaType: item.mediaType,
             mediaUrl: item.mediaUrl,
+            posterUrl: item.mediaType === "video" ? item.posterUrl || "" : "",
             deviceType: item.deviceType,
             season: item.season || "all",
             order: item.order,
@@ -75,6 +85,7 @@ const getAllHeroContent = asyncHandler(async (req, res) => {
 // @route   POST /api/admin/hero
 // @access  Private/Admin
 const createHeroContent = asyncHandler(async (req, res) => {
+    if (rejectInvalid(req, res)) return;
     const {
         title,
         subtitle,
@@ -87,6 +98,7 @@ const createHeroContent = asyncHandler(async (req, res) => {
         isActive,
         label,
         season,
+        posterUrl,
     } = req.body;
 
     const newContent = new HeroContent({
@@ -101,6 +113,7 @@ const createHeroContent = asyncHandler(async (req, res) => {
         order: order || 0,
         isActive: isActive !== undefined ? isActive : true,
         label: label || "",
+        posterUrl: mediaType === "video" ? posterUrl || "" : "",
     });
 
     const createdContent = await newContent.save();
@@ -111,6 +124,7 @@ const createHeroContent = asyncHandler(async (req, res) => {
 // @route   PUT /api/admin/hero/:id
 // @access  Private/Admin
 const updateHeroContent = asyncHandler(async (req, res) => {
+    if (rejectInvalid(req, res)) return;
     const {
         title,
         subtitle,
@@ -123,6 +137,7 @@ const updateHeroContent = asyncHandler(async (req, res) => {
         isActive,
         label,
         season,
+        posterUrl,
     } = req.body;
     const content = await HeroContent.findById(req.params.id);
 
@@ -138,6 +153,9 @@ const updateHeroContent = asyncHandler(async (req, res) => {
         content.order = order !== undefined ? order : content.order;
         content.isActive = isActive !== undefined ? isActive : content.isActive;
         if (["all", "mango", "winter"].includes(season)) content.season = season;
+        // "" clears it. A poster only means something on a video record.
+        if (posterUrl !== undefined) content.posterUrl = posterUrl;
+        if (content.mediaType !== "video") content.posterUrl = "";
 
         const updatedContent = await content.save();
         res.json(updatedContent);
